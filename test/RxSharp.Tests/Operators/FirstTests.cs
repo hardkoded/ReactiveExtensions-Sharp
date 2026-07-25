@@ -94,4 +94,22 @@ public class FirstTests
 
         Assert.That(received, Is.SameAs(error));
     }
+
+    [Test]
+    public void ShouldStopListeningToASynchronousObservableWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        var synchronousObservable = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        synchronousObservable.First().Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0 }));
+    }
 }

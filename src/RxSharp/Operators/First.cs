@@ -92,8 +92,13 @@ public static class FirstOperator
         => source.Operate<T, T>((src, subscriber) =>
         {
             var index = 0;
-            var sourceSubscription = new SingleAssignmentDisposable();
-            sourceSubscription.Disposable = src.Subscribe(
+
+            // Built directly (see Take.cs for the full explanation) so this closure can dispose the inner
+            // subscriber immediately, even from within a nested/synchronous source callback — a
+            // SingleAssignmentDisposable wrapping src.Subscribe(...)'s return value can't do that, since
+            // that value isn't assigned until Subscribe returns.
+            Subscriber<T> innerSubscriber = null!;
+            innerSubscriber = Subscriber.Create<T>(
                 onNext: value =>
                 {
                     bool matches;
@@ -111,7 +116,7 @@ public static class FirstOperator
                     {
                         subscriber.OnNext(value);
                         subscriber.OnCompleted();
-                        sourceSubscription.Dispose();
+                        innerSubscriber.Dispose();
                     }
                 },
                 onError: subscriber.OnError,
@@ -128,6 +133,6 @@ public static class FirstOperator
                     }
                 });
 
-            return sourceSubscription;
+            return src.Subscribe(innerSubscriber);
         });
 }

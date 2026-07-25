@@ -102,4 +102,24 @@ public class TakeTests
 
         Assert.That(results, Is.EqualTo(new[] { 1 }));
     }
+
+    [Test]
+    public void ShouldStopListeningToASynchronousObservableWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        var synchronousObservable = new Observable<int>(subscriber =>
+        {
+            // This checks whether the subscriber was closed on each loop; when the unsubscribe hits
+            // (from Take), it should be closed, and the loop should stop even mid-emission.
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        synchronousObservable.Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }
