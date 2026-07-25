@@ -22,11 +22,20 @@ public static class CatchErrorOperator
     public static Observable<T> CatchError<T>(this Observable<T> source, Func<Exception, Observable<T>> selector)
         => source.Operate<T, T>((src, subscriber) =>
         {
-            var subscription = new SingleAssignmentDisposable();
-            subscription.Disposable = src.Subscribe(
+            // Built directly and registered as a child of `subscriber` *before* subscribing (see
+            // OperatorHelper.SubscribeChild's doc comment for why) so a downstream disposal cascades up and
+            // stops a fully-synchronous source mid-loop, instead of only once the whole synchronous call stack
+            // unwinds. Unlike SubscribeChild's target operators, this inner subscriber is only live for the
+            // "before the first error" phase — once the source errors, it's Remove()'d, and the replacement
+            // observable is subscribed with `subscriber` itself (not a fresh wrapper), so no further Add/Remove
+            // bookkeeping is needed: the replacement is naturally coupled to the same downstream subscriber.
+            Subscriber<T> sourceSubscriber = null!;
+            sourceSubscriber = Subscriber.Create<T>(
                 onNext: subscriber.OnNext,
                 onError: error =>
                 {
+                    subscriber.Remove(sourceSubscriber);
+
                     Observable<T> replacement;
                     try
                     {
@@ -38,10 +47,17 @@ public static class CatchErrorOperator
                         return;
                     }
 
-                    subscription.Disposable = replacement.Subscribe(subscriber);
+                    replacement.Subscribe(subscriber);
                 },
-                onComplete: subscriber.OnCompleted);
+                onComplete: () =>
+                {
+                    subscriber.Remove(sourceSubscriber);
+                    subscriber.OnCompleted();
+                });
 
-            return subscription;
+            subscriber.Add(sourceSubscriber);
+            src.Subscribe(sourceSubscriber);
+
+            return null;
         });
 }

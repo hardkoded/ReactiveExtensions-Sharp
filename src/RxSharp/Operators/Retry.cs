@@ -38,25 +38,53 @@ public static class RetryOperator
         return source.Operate<T, T>((src, subscriber) =>
         {
             var soFar = 0;
-            var innerSubscription = new SingleAssignmentDisposable();
 
             void SubscribeForRetry()
             {
-                innerSubscription.Disposable = src.Subscribe(
+                // Guards against recursing into another attempt once downstream has already gone away — same
+                // stack-overflow-avoidance reasoning as Repeat/RetryWhen (see CLAUDE.md): a rapidly,
+                // synchronously erroring source with a large retry count would otherwise keep recursing forever
+                // even after downstream stopped caring.
+                if (subscriber.IsDisposed)
+                {
+                    return;
+                }
+
+                // Built directly (see OperatorHelper.SubscribeChild's doc comment for the general pattern) and
+                // registered as a child of `subscriber` *before* subscribing, rather than via the
+                // Subscribe(onNext:...) convenience overload. This lets a downstream disposal (e.g. an
+                // early-completing operator further down the chain) cascade up and stop a fully-synchronous
+                // source mid-attempt, not just once the whole synchronous call stack unwinds. Unlike the
+                // single-stable-inner-subscription operators SubscribeChild targets, a new attemptSubscriber
+                // replaces the previous one on every retry, so it must also be Remove()'d once the attempt ends
+                // (error handled or completed) to avoid the downstream subscriber's finalizer list growing
+                // unboundedly across many retries.
+                Subscriber<T> attemptSubscriber = null!;
+                attemptSubscriber = Subscriber.Create<T>(
                     onNext: subscriber.OnNext,
                     onError: err =>
                     {
+                        subscriber.Remove(attemptSubscriber);
+                        attemptSubscriber.Dispose();
+
+                        if (subscriber.IsDisposed)
+                        {
+                            return;
+                        }
+
                         if (soFar++ < count)
                         {
                             if (delay is { } d)
                             {
-                                var notifierSubscription = new SingleAssignmentDisposable();
-                                notifierSubscription.Disposable = Observable.Timer(d, scheduler).Subscribe(
-                                    onNext: _ =>
-                                    {
-                                        notifierSubscription.Dispose();
-                                        SubscribeForRetry();
-                                    });
+                                Subscriber<long> timerSubscriber = null!;
+                                timerSubscriber = Subscriber.Create<long>(onNext: _ =>
+                                {
+                                    subscriber.Remove(timerSubscriber);
+                                    timerSubscriber.Dispose();
+                                    SubscribeForRetry();
+                                });
+                                subscriber.Add(timerSubscriber);
+                                Observable.Timer(d, scheduler).Subscribe(timerSubscriber);
                             }
                             else
                             {
@@ -68,11 +96,19 @@ public static class RetryOperator
                             subscriber.OnError(err);
                         }
                     },
-                    onComplete: subscriber.OnCompleted);
+                    onComplete: () =>
+                    {
+                        subscriber.Remove(attemptSubscriber);
+                        attemptSubscriber.Dispose();
+                        subscriber.OnCompleted();
+                    });
+
+                subscriber.Add(attemptSubscriber);
+                src.Subscribe(attemptSubscriber);
             }
 
             SubscribeForRetry();
-            return innerSubscription;
+            return null;
         });
     }
 }

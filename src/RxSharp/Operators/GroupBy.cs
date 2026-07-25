@@ -70,7 +70,12 @@ public static class GroupByOperator
                 subscriber.OnError(error);
             }
 
-            return src.Subscribe(
+            // Subscribed via SubscribeChild since this is the single, stable subscription to `source` for the
+            // whole lifetime of the operator (never replaced) — see OperatorHelper.SubscribeChild's doc comment.
+            // This lets a downstream disposal (e.g. Take on the outer stream of groups) cascade up and stop a
+            // fully-synchronous source mid-loop, instead of only once the whole synchronous call stack unwinds.
+            src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     TKey key;
@@ -103,24 +108,34 @@ public static class GroupByOperator
                                 return;
                             }
 
-                            var durationSubscription = new SingleAssignmentDisposable();
+                            // Built directly and registered as a child of `subscriber` *before* subscribing (see
+                            // OperatorHelper.SubscribeChild's doc comment for the general reasoning), then
+                            // Remove()'d as soon as the group closes: groups — and therefore duration notifiers —
+                            // are per-key and can be unbounded in number, so leaving each one in `subscriber`'s
+                            // finalizer list forever would leak. Building it directly (rather than reassigning a
+                            // SingleAssignmentDisposable after Subscribe returns) also avoids the
+                            // WindowWhen/BufferWhen-style hazard (see CLAUDE.md) of a duration notifier that
+                            // emits and then completes synchronously double-closing the same group.
+                            Subscriber<TDuration> durationSubscriber = null!;
 
                             void CloseGroup()
                             {
+                                subscriber.Remove(durationSubscriber);
+                                durationSubscriber.Dispose();
+
                                 if (groups.Remove(key))
                                 {
                                     group.OnCompleted();
                                 }
-
-                                subscriber.Remove(durationSubscription);
-                                durationSubscription.Dispose();
                             }
 
-                            durationSubscription.Disposable = duration.Subscribe(
+                            durationSubscriber = Subscriber.Create<TDuration>(
                                 onNext: _ => CloseGroup(),
                                 onError: ErrorAll,
                                 onComplete: CloseGroup);
-                            subscriber.Add(durationSubscription);
+
+                            subscriber.Add(durationSubscriber);
+                            duration.Subscribe(durationSubscriber);
                         }
 
                         subscriber.OnNext(groupedObservable);
@@ -149,5 +164,7 @@ public static class GroupByOperator
 
                     subscriber.OnCompleted();
                 });
+
+            return null;
         });
 }
