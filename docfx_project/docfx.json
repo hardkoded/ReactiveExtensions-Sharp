@@ -1,0 +1,55 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": [
+            "RxSharp.csproj"
+          ],
+          "src": "../src/RxSharp"
+        }
+      ],
+      "dest": "api",
+      "disableGitFeatures": false,
+      "properties": {
+        "TargetFramework": "net10.0"
+      },
+      "allowCompilationErrors": true
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": [
+          "api/**.yml",
+          "api/index.md"
+        ]
+      },
+      {
+        "files": [
+          "toc.yml",
+          "*.md"
+        ]
+      }
+    ],
+    "resource": [],
+    "overwrite": [],
+    "dest": "../docs",
+    "globalMetadataFiles": [],
+    "fileMetadataFiles": [],
+    "template": [
+      "default",
+      "modern"
+    ],
+    "postProcessors": [],
+    "globalMetadata": {
+      "_appTitle": "RxSharp",
+      "_appFooter": "<span>Made with love by <a href=\"https://www.hardkoded.com\" rel=\"noreferrer\">Dario Kondratiuk</a></span>"
+    },
+    "markdownEngineName": "markdig",
+    "noLangKeyword": false,
+    "keepFileLink": false,
+    "cleanupCacheHistory": false,
+    "disableGitFeatures": false
+  }
+}

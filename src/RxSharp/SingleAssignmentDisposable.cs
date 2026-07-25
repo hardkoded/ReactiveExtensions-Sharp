@@ -12,6 +12,12 @@ public sealed class SingleAssignmentDisposable : IDisposable
     private IDisposable? _disposable;
     private bool _isDisposed;
 
+    /// <summary>
+    /// Gets or sets the disposable this instance wraps. Setting this before <see cref="Dispose"/> has been called
+    /// simply reassigns the wrapped target (the previous target, if any, is <em>not</em> disposed — see the type
+    /// summary). Setting it after <see cref="Dispose"/> has been called disposes the new value immediately instead
+    /// of storing it.
+    /// </summary>
     public IDisposable? Disposable
     {
         get
@@ -41,6 +47,7 @@ public sealed class SingleAssignmentDisposable : IDisposable
         }
     }
 
+    /// <summary>Disposes the currently-wrapped <see cref="Disposable"/>, if any, and marks this instance as disposed. Safe to call more than once — subsequent calls are no-ops.</summary>
     public void Dispose()
     {
         IDisposable? toDispose = null;

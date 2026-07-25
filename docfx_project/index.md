@@ -1,0 +1,25 @@
+# RxSharp
+
+A .NET port of [RxJS](https://rxjs.dev/) — same operators, same semantics, same names you already know, in idiomatic C#.
+
+## Quick Start
+
+```
+dotnet add package RxSharp
+```
+
+```csharp
+var clicks = Observable.FromEvent(button, nameof(button.Click));
+
+Observable.Interval(TimeSpan.FromSeconds(1))
+    .Map(x => x * x)
+    .Filter(x => x % 2 == 0)
+    .TakeUntil(clicks)
+    .Subscribe(x => Console.WriteLine(x));
+```
+
+## Links
+
+* [GitHub](https://github.com/hardkoded/rxjs-sharp)
+* [API Documentation](api/index.md)
+* [Issues](https://github.com/hardkoded/rxjs-sharp/issues)

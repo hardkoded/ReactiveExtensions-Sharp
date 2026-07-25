@@ -485,3 +485,9 @@ $RECYCLE.BIN/
 
 # macOS
 .DS_Store
+
+# DocFX generated site (built by docfx_project/docfx.json, published via CI on tags)
+/docs/
+docfx_project/api/*.yml
+docfx_project/api/.manifest
+docfx_project/obj/
