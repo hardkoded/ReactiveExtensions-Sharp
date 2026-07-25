@@ -1,3 +1,5 @@
+using RxSharp.Subjects;
+
 namespace RxSharp;
 
 /// <summary>Creation functions for <see cref="Observable{T}"/>. Mirrors rxjs's <c>observable/</c> creation functions.</summary>
@@ -604,6 +606,280 @@ public static class Observable
     /// <summary>Does nothing. Useful as a default callback where an operator requires a delegate (e.g. an ignored <c>onNext</c>/<c>onComplete</c> handler).</summary>
     public static void Noop()
     {
+    }
+
+    /// <summary>
+    /// Wraps a 0-input-argument callback-style function (whose last parameter is a plain, no-error callback) into a
+    /// function that returns an <see cref="Observable{Unit}"/>. Mirrors rxjs's <c>bindCallback</c>: the wrapped
+    /// function is invoked at most once per call to the returned function -- the first subscriber to the resulting
+    /// observable triggers the call, and every subscriber (including ones that subscribe later, after the callback
+    /// already fired) shares and replays the same cached result, exactly like rxjs's internal <c>AsyncSubject</c>-backed
+    /// caching. See the <c>BindCallback&lt;TResult&gt;</c> overload's remarks for the deliberate deviations from
+    /// rxjs's literal behavior (no scheduler parameter, no resultSelector parameter, single-result-value callbacks only).
+    /// </summary>
+    /// <param name="func">The callback-style function to wrap. Its only parameter is the callback to invoke once the underlying work completes.</param>
+    /// <returns>A function that, when called, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires.</returns>
+    public static Func<Observable<Unit>> BindCallback(Action<Action> func)
+        => () => BindCallbackCore<Unit>(cb => func(() => cb(Unit.Default)));
+
+    /// <summary>
+    /// Wraps a 0-input-argument callback-style function (whose last parameter is a plain callback receiving a
+    /// single result value) into a function that returns an <see cref="Observable{TResult}"/>. Mirrors rxjs's
+    /// <c>bindCallback</c>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberate deviations from rxjs's literal <c>bindCallback</c>:
+    /// <list type="bullet">
+    /// <item><description>No <c>scheduler</c> parameter: rxjs composes an optional scheduler via its own <c>subscribeOn</c>/<c>observeOn</c> operators, which RxSharp does not have yet. The wrapped function is always invoked synchronously, on the subscribing thread, at first-subscribe time.</description></item>
+    /// <item><description>No <c>resultSelector</c> parameter: since the returned function already produces a full <see cref="Observable{TResult}"/>, a caller gets the same effect (and more idiomatically) via <c>.Map(selector)</c> on the result.</description></item>
+    /// <item><description>Only a single result value is supported (rxjs packs multiple callback arguments into an array). C# delegates aren't variadic; a callback-style API with several logically-related result values should bundle them into a tuple or record before calling back.</description></item>
+    /// <item><description>No JS-style dynamic <c>this</c> rebinding (rxjs's <c>.apply</c>/<c>.call</c> tests): the wrapped delegate already captures whatever state/closure the caller bound it to.</description></item>
+    /// </list>
+    /// </remarks>
+    /// <typeparam name="TResult">The type of the single value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, when called, returns an <see cref="Observable{TResult}"/> emitting the callback's result then completing.</returns>
+    public static Func<Observable<TResult>> BindCallback<TResult>(Action<Action<TResult>> func)
+        => () => BindCallbackCore(func);
+
+    /// <summary>Overload of <see cref="BindCallback(Action{Action})"/> for a 1-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input argument, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires.</returns>
+    public static Func<T1, Observable<Unit>> BindCallback<T1>(Action<T1, Action> func)
+        => arg1 => BindCallbackCore<Unit>(cb => func(arg1, () => cb(Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindCallback{TResult}(Action{Action{TResult}})"/> for a 1-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="TResult">The type of the single value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input argument, returns an <see cref="Observable{TResult}"/> emitting the callback's result then completing.</returns>
+    public static Func<T1, Observable<TResult>> BindCallback<T1, TResult>(Action<T1, Action<TResult>> func)
+        => arg1 => BindCallbackCore<TResult>(cb => func(arg1, cb));
+
+    /// <summary>Overload of <see cref="BindCallback(Action{Action})"/> for a 2-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires.</returns>
+    public static Func<T1, T2, Observable<Unit>> BindCallback<T1, T2>(Action<T1, T2, Action> func)
+        => (arg1, arg2) => BindCallbackCore<Unit>(cb => func(arg1, arg2, () => cb(Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindCallback{TResult}(Action{Action{TResult}})"/> for a 2-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="TResult">The type of the single value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{TResult}"/> emitting the callback's result then completing.</returns>
+    public static Func<T1, T2, Observable<TResult>> BindCallback<T1, T2, TResult>(Action<T1, T2, Action<TResult>> func)
+        => (arg1, arg2) => BindCallbackCore<TResult>(cb => func(arg1, arg2, cb));
+
+    /// <summary>Overload of <see cref="BindCallback(Action{Action})"/> for a 3-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="T3">The type of the function's third argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires.</returns>
+    public static Func<T1, T2, T3, Observable<Unit>> BindCallback<T1, T2, T3>(Action<T1, T2, T3, Action> func)
+        => (arg1, arg2, arg3) => BindCallbackCore<Unit>(cb => func(arg1, arg2, arg3, () => cb(Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindCallback{TResult}(Action{Action{TResult}})"/> for a 3-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="T3">The type of the function's third argument.</typeparam>
+    /// <typeparam name="TResult">The type of the single value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{TResult}"/> emitting the callback's result then completing.</returns>
+    public static Func<T1, T2, T3, Observable<TResult>> BindCallback<T1, T2, T3, TResult>(Action<T1, T2, T3, Action<TResult>> func)
+        => (arg1, arg2, arg3) => BindCallbackCore<TResult>(cb => func(arg1, arg2, arg3, cb));
+
+    /// <summary>
+    /// Wraps a 0-input-argument, Node.js-convention callback-style function (whose last parameter is a callback
+    /// receiving an error-or-null first, with no success value) into a function that returns an
+    /// <see cref="Observable{Unit}"/>. Mirrors rxjs's <c>bindNodeCallback</c>. See the <c>BindNodeCallback&lt;TResult&gt;</c>
+    /// overload's remarks for the deliberate deviations from rxjs's literal behavior.
+    /// </summary>
+    /// <param name="func">The callback-style function to wrap. Its only parameter is the callback to invoke once the underlying work completes, with <see langword="null"/> for no error.</param>
+    /// <returns>A function that, when called, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires without an error, or erroring if it fires with one.</returns>
+    public static Func<Observable<Unit>> BindNodeCallback(Action<Action<Exception?>> func)
+        => () => BindNodeCallbackCore<Unit>(cb => func(error => cb(error, Unit.Default)));
+
+    /// <summary>
+    /// Wraps a 0-input-argument, Node.js-convention callback-style function (whose last parameter is a callback
+    /// receiving an error-or-null first, then a single success value) into a function that returns an
+    /// <see cref="Observable{TResult}"/>. Mirrors rxjs's <c>bindNodeCallback</c>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberate deviations from rxjs's literal <c>bindNodeCallback</c>, in addition to the ones already listed on
+    /// <see cref="BindCallback{TResult}(Action{Action{TResult}})"/> (no scheduler parameter, no resultSelector
+    /// parameter, single-result-value callbacks only, no JS-style dynamic <c>this</c> rebinding):
+    /// <list type="bullet">
+    /// <item><description>The Node.js "first callback argument is the error, or a loosely-falsy value like <see langword="null"/>/<see langword="undefined"/> for no error" convention is mapped to a strongly-typed <see cref="Exception"/>? first parameter: <see langword="null"/> means no error, any non-null <see cref="Exception"/> is forwarded via the resulting observable's <c>OnError</c>. This is the cleanest idiomatic C# mapping -- there is no equivalent to JS's untyped falsy-check for an arbitrary error value.</description></item>
+    /// </list>
+    /// </remarks>
+    /// <typeparam name="TResult">The type of the success value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, when called, returns an <see cref="Observable{TResult}"/> emitting the callback's success value then completing, or erroring if the callback fires with a non-null error.</returns>
+    public static Func<Observable<TResult>> BindNodeCallback<TResult>(Action<Action<Exception?, TResult>> func)
+        => () => BindNodeCallbackCore(func);
+
+    /// <summary>Overload of <see cref="BindNodeCallback(Action{Action{Exception}})"/> for a 1-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input argument, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires without an error, or erroring if it fires with one.</returns>
+    public static Func<T1, Observable<Unit>> BindNodeCallback<T1>(Action<T1, Action<Exception?>> func)
+        => arg1 => BindNodeCallbackCore<Unit>(cb => func(arg1, error => cb(error, Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindNodeCallback{TResult}(Action{Action{Exception, TResult}})"/> for a 1-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="TResult">The type of the success value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input argument, returns an <see cref="Observable{TResult}"/> emitting the callback's success value then completing, or erroring if the callback fires with a non-null error.</returns>
+    public static Func<T1, Observable<TResult>> BindNodeCallback<T1, TResult>(Action<T1, Action<Exception?, TResult>> func)
+        => arg1 => BindNodeCallbackCore<TResult>(cb => func(arg1, cb));
+
+    /// <summary>Overload of <see cref="BindNodeCallback(Action{Action{Exception}})"/> for a 2-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires without an error, or erroring if it fires with one.</returns>
+    public static Func<T1, T2, Observable<Unit>> BindNodeCallback<T1, T2>(Action<T1, T2, Action<Exception?>> func)
+        => (arg1, arg2) => BindNodeCallbackCore<Unit>(cb => func(arg1, arg2, error => cb(error, Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindNodeCallback{TResult}(Action{Action{Exception, TResult}})"/> for a 2-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="TResult">The type of the success value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{TResult}"/> emitting the callback's success value then completing, or erroring if the callback fires with a non-null error.</returns>
+    public static Func<T1, T2, Observable<TResult>> BindNodeCallback<T1, T2, TResult>(Action<T1, T2, Action<Exception?, TResult>> func)
+        => (arg1, arg2) => BindNodeCallbackCore<TResult>(cb => func(arg1, arg2, cb));
+
+    /// <summary>Overload of <see cref="BindNodeCallback(Action{Action{Exception}})"/> for a 3-input-argument callback-style function.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="T3">The type of the function's third argument.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{Unit}"/> emitting <see cref="Unit.Default"/> then completing once the callback fires without an error, or erroring if it fires with one.</returns>
+    public static Func<T1, T2, T3, Observable<Unit>> BindNodeCallback<T1, T2, T3>(Action<T1, T2, T3, Action<Exception?>> func)
+        => (arg1, arg2, arg3) => BindNodeCallbackCore<Unit>(cb => func(arg1, arg2, arg3, error => cb(error, Unit.Default)));
+
+    /// <summary>Overload of <see cref="BindNodeCallback{TResult}(Action{Action{Exception, TResult}})"/> for a 3-input-argument callback-style function. See that overload's remarks for the deliberate deviations from rxjs.</summary>
+    /// <typeparam name="T1">The type of the function's first argument.</typeparam>
+    /// <typeparam name="T2">The type of the function's second argument.</typeparam>
+    /// <typeparam name="T3">The type of the function's third argument.</typeparam>
+    /// <typeparam name="TResult">The type of the success value the callback is invoked with.</typeparam>
+    /// <param name="func">The callback-style function to wrap.</param>
+    /// <returns>A function that, given the input arguments, returns an <see cref="Observable{TResult}"/> emitting the callback's success value then completing, or erroring if the callback fires with a non-null error.</returns>
+    public static Func<T1, T2, T3, Observable<TResult>> BindNodeCallback<T1, T2, T3, TResult>(Action<T1, T2, T3, Action<Exception?, TResult>> func)
+        => (arg1, arg2, arg3) => BindNodeCallbackCore<TResult>(cb => func(arg1, arg2, arg3, cb));
+
+    /// <summary>
+    /// Shared implementation behind every <c>BindCallback</c> overload. Ported from rxjs's own
+    /// <c>bindCallbackInternals</c>: builds a fresh <see cref="AsyncSubject{T}"/> and an <c>uninitialized</c> flag
+    /// (both captured once per call to the bound function, giving each call its own independent cache -- see the
+    /// "should create a separate internal subject for each call" test), and returns an <see cref="Observable{TResult}"/>
+    /// whose subscribe logic invokes <paramref name="invoke"/> exactly once, on the first subscriber, then multicasts
+    /// the cached result to every subscriber (including later ones) via the subject.
+    /// </summary>
+    /// <remarks>
+    /// The <c>isAsync</c>/<c>isComplete</c> flag dance mirrors rxjs exactly and exists for one specific edge case:
+    /// if <paramref name="invoke"/> calls the callback synchronously and then itself throws afterwards (e.g. the
+    /// wrapped function does cleanup after invoking the callback and that cleanup throws), completing the subject
+    /// is deliberately deferred until after <paramref name="invoke"/> returns -- so if it throws instead, the
+    /// subject never completes (the cached value is lost for good) and the exception propagates out of this
+    /// method's caller, to be caught by <see cref="Observable{T}.Subscribe(IObserver{T})"/>'s own synchronous-throw
+    /// handling and forwarded to the current subscriber directly. This is why <see cref="BindCallbackCore{TResult}"/>
+    /// itself must not wrap <paramref name="invoke"/> in its own try/catch (that would swallow the exception into
+    /// the already-terminal subject instead of letting it reach the caller).
+    /// </remarks>
+    /// <typeparam name="TResult">The type of the single value the callback is invoked with.</typeparam>
+    /// <param name="invoke">Invokes the wrapped function, itself invoking the given completion callback with the single result value.</param>
+    /// <returns>An observable that lazily invokes <paramref name="invoke"/> on first subscribe and caches/replays its result.</returns>
+    private static Observable<TResult> BindCallbackCore<TResult>(Action<Action<TResult>> invoke)
+    {
+        var subject = new AsyncSubject<TResult>();
+        var uninitialized = true;
+
+        return new Observable<TResult>(subscriber =>
+        {
+            var subscription = subject.Subscribe(subscriber);
+
+            if (uninitialized)
+            {
+                uninitialized = false;
+
+                var isAsync = false;
+                var isComplete = false;
+
+                invoke(result =>
+                {
+                    subject.OnNext(result);
+                    isComplete = true;
+                    if (isAsync)
+                    {
+                        subject.OnCompleted();
+                    }
+                });
+
+                if (isComplete)
+                {
+                    subject.OnCompleted();
+                }
+
+                isAsync = true;
+            }
+
+            return subscription;
+        });
+    }
+
+    /// <summary>Shared implementation behind every <c>BindNodeCallback</c> overload. Same caching mechanism as <see cref="BindCallbackCore{TResult}"/>, but the completion callback's first parameter is an error, checked before buffering the success value.</summary>
+    /// <typeparam name="TResult">The type of the success value the callback is invoked with.</typeparam>
+    /// <param name="invoke">Invokes the wrapped function, itself invoking the given completion callback with an error-or-null, then the success value.</param>
+    /// <returns>An observable that lazily invokes <paramref name="invoke"/> on first subscribe and caches/replays its result, or errors if the callback fires with a non-null error.</returns>
+    private static Observable<TResult> BindNodeCallbackCore<TResult>(Action<Action<Exception?, TResult>> invoke)
+    {
+        var subject = new AsyncSubject<TResult>();
+        var uninitialized = true;
+
+        return new Observable<TResult>(subscriber =>
+        {
+            var subscription = subject.Subscribe(subscriber);
+
+            if (uninitialized)
+            {
+                uninitialized = false;
+
+                var isAsync = false;
+                var isComplete = false;
+
+                invoke((error, result) =>
+                {
+                    if (error is not null)
+                    {
+                        subject.OnError(error);
+                        return;
+                    }
+
+                    subject.OnNext(result);
+                    isComplete = true;
+                    if (isAsync)
+                    {
+                        subject.OnCompleted();
+                    }
+                });
+
+                if (isComplete)
+                {
+                    subject.OnCompleted();
+                }
+
+                isAsync = true;
+            }
+
+            return subscription;
+        });
     }
 }
 
