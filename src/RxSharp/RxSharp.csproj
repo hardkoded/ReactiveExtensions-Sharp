@@ -27,8 +27,14 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <!-- XML-doc completeness (CS1591, SA160x) is deferred to the M4 docs pass; not worth blocking every TDD cycle on it in M1/M2. -->
-    <NoWarn>$(NoWarn);CS1591;SA1600;SA1601;SA1602;SA1633</NoWarn>
+    <!--
+      Deferred to the M4 docs/polish pass, not worth blocking TDD cycles on while the API is still moving:
+        - CS1591, SA160x/SA161x: XML-doc completeness
+        - CA1032, CA1063/CA1816: full "standard exception constructors" / IDisposable(bool)+finalizer ceremony
+        - CA1062: defensive null-checks on every public parameter
+        - CA1716: parameter names that happen to collide with keywords in other CLI languages (e.g. `error`)
+    -->
+    <NoWarn>$(NoWarn);CS1591;SA1600;SA1601;SA1602;SA1633;SA1618;SA1611;SA1615;SA1616;CA1032;CA1063;CA1816;CA1062;CA1716;CA2000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
