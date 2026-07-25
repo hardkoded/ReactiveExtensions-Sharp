@@ -15,6 +15,8 @@ public class TestScheduler : VirtualTimeScheduler
     /// as a <see cref="TimeSpan"/>, for use with <see cref="VirtualTimeScheduler.AdvanceTo"/>. Mirrors rxjs's
     /// <c>createTime</c>.
     /// </summary>
+    /// <param name="marbles">A time diagram containing exactly one completion marker <c>|</c>.</param>
+    /// <returns>The virtual time of the completion marker.</returns>
     public static TimeSpan ParseTime(string marbles)
     {
         if (marbles is null)
@@ -37,6 +39,11 @@ public class TestScheduler : VirtualTimeScheduler
     /// <c>cold()</c>. The diagram cannot contain a subscription marker <c>^</c> — a cold source has no fixed
     /// subscription point, every subscriber gets its own independent playback.
     /// </summary>
+    /// <typeparam name="T">The element type of the observable.</typeparam>
+    /// <param name="marbles">The marble diagram (see <see cref="MarbleParser"/> for the supported grammar).</param>
+    /// <param name="values">Maps marble characters to emitted values; when omitted, the marble character itself is used as the value (requires <typeparamref name="T"/> to be <see cref="char"/>).</param>
+    /// <param name="error">The error to emit for an <c>#</c> marker, if the diagram contains one; defaults to a generic exception.</param>
+    /// <returns>An observable that replays the diagram independently for each subscriber.</returns>
     public Observable<T> CreateColdObservable<T>(string marbles, IReadOnlyDictionary<char, T>? values = null, Exception? error = null)
     {
         if (marbles is null)
@@ -73,6 +80,11 @@ public class TestScheduler : VirtualTimeScheduler
     /// Subscribers that attach after a message's due time has already passed simply miss it, same as subscribing
     /// to a real <see cref="Subject{T}"/> late.
     /// </summary>
+    /// <typeparam name="T">The element type of the observable.</typeparam>
+    /// <param name="marbles">The marble diagram (see <see cref="MarbleParser"/> for the supported grammar).</param>
+    /// <param name="values">Maps marble characters to emitted values; when omitted, the marble character itself is used as the value (requires <typeparamref name="T"/> to be <see cref="char"/>).</param>
+    /// <param name="error">The error to emit for an <c>#</c> marker, if the diagram contains one; defaults to a generic exception.</param>
+    /// <returns>An observable shared by every subscriber, driven by a single underlying <see cref="Subject{T}"/>.</returns>
     public Observable<T> CreateHotObservable<T>(string marbles, IReadOnlyDictionary<char, T>? values = null, Exception? error = null)
     {
         var messages = MarbleParser.Parse(marbles, values, error);
@@ -95,6 +107,9 @@ public class TestScheduler : VirtualTimeScheduler
     /// (<see cref="VirtualTimeScheduler.Start"/>, <see cref="VirtualTimeScheduler.AdvanceTo"/>, or
     /// <see cref="VirtualTimeScheduler.AdvanceBy"/>), then assert against the same list reference.
     /// </summary>
+    /// <typeparam name="T">The element type of the observable.</typeparam>
+    /// <param name="source">The observable to subscribe to and record notifications from.</param>
+    /// <returns>A live list that fills in with each notification as the scheduler is advanced.</returns>
     public IReadOnlyList<Recorded<T>> Record<T>(Observable<T> source)
     {
         if (source is null)

@@ -29,6 +29,9 @@ public class VirtualTimeScheduler : IScheduler
     public DateTimeOffset Now => new DateTimeOffset(_clock.Ticks, TimeSpan.Zero);
 
     /// <summary>Queues <paramref name="action"/> to run once the clock reaches <see cref="Clock"/> + <paramref name="dueTime"/>. Returns a disposable that cancels the action if it hasn't run yet.</summary>
+    /// <param name="action">The action to run once due.</param>
+    /// <param name="dueTime">The delay, relative to the current virtual <see cref="Clock"/>, after which to run <paramref name="action"/>. Negative values are clamped to zero.</param>
+    /// <returns>A disposable that cancels the action if it hasn't run yet.</returns>
     public IDisposable Schedule(Action action, TimeSpan dueTime)
     {
         if (action is null)
@@ -43,6 +46,7 @@ public class VirtualTimeScheduler : IScheduler
     }
 
     /// <summary>Moves the clock forward by <paramref name="time"/> and runs every action due by the new clock value. Equivalent to <c>AdvanceTo(Clock + time)</c>.</summary>
+    /// <param name="time">The non-negative amount of virtual time to move the clock forward by.</param>
     public void AdvanceBy(TimeSpan time)
     {
         if (time < TimeSpan.Zero)
@@ -59,6 +63,7 @@ public class VirtualTimeScheduler : IScheduler
     /// after <paramref name="time"/> are left queued untouched — advancing never runs anything past the target.
     /// The clock always ends exactly at <paramref name="time"/>, even if nothing was queued to run.
     /// </summary>
+    /// <param name="time">The virtual time to advance the clock to; must be at or after the current <see cref="Clock"/>.</param>
     public void AdvanceTo(TimeSpan time)
     {
         if (time < _clock)
