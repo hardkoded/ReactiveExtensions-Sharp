@@ -46,4 +46,25 @@ public class ConcatMapTests
 
         Assert.That(received, Is.SameAs(error));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): a fully-synchronous, self-checking
+    // source composed with ConcatMap through an early-completing downstream Take must stop mid-loop, not just
+    // after the whole synchronous call stack unwinds. Mirrors DisposalCascadeTests.cs's pattern.
+    [Test]
+    public void ShouldCascadeDisposalToASynchronousSourceThroughTake()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.ConcatMap(x => Observable.Of(x)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

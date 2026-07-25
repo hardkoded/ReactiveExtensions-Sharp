@@ -73,19 +73,27 @@ public static class ConcatMapOperator
                 }
 
                 isInnerActive = true;
-                var innerSubscription = new SingleAssignmentDisposable();
-                innerSubscription.Disposable = inner.Subscribe(
+
+                // Built directly (not via Subscribe's return value) and registered with `subscriber` before
+                // `inner.Subscribe` runs, so a fully-synchronous inner is stopped mid-loop by a downstream
+                // disposal instead of only after Subscribe returns. Removed again once it naturally completes,
+                // so `subscriber`'s finalizer list doesn't grow unboundedly across a long-running sequence.
+                Subscriber<TResult>? innerSubscriber = null;
+                innerSubscriber = Subscriber.Create<TResult>(
                     onNext: subscriber.OnNext,
                     onError: subscriber.OnError,
                     onComplete: () =>
                     {
                         isInnerActive = false;
+                        subscriber.Remove(innerSubscriber!);
                         SubscribeNext();
                     });
-                subscriber.Add(innerSubscription);
+                subscriber.Add(innerSubscriber);
+                inner.Subscribe(innerSubscriber);
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     queue.Enqueue(value);

@@ -54,7 +54,8 @@ public static class ExhaustMapOperator
             var innerSubscription = new SingleAssignmentDisposable();
             subscriber.Add(innerSubscription);
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     if (hasInner)
@@ -74,7 +75,14 @@ public static class ExhaustMapOperator
                     }
 
                     hasInner = true;
-                    innerSubscription.Disposable = inner.Subscribe(
+
+                    // Built directly and assigned into the (already-registered-with-`subscriber`) slot BEFORE
+                    // `inner.Subscribe` runs, so a fully-synchronous inner is stopped mid-loop by a downstream
+                    // disposal instead of only after Subscribe returns. `innerSubscription` is a single, reused
+                    // slot added to `subscriber` once for the operator's whole lifetime, so no matching Remove
+                    // is needed per accepted value — reassigning it is enough.
+                    Subscriber<TResult>? newInnerSubscriber = null;
+                    newInnerSubscriber = Subscriber.Create<TResult>(
                         onNext: subscriber.OnNext,
                         onError: subscriber.OnError,
                         onComplete: () =>
@@ -85,6 +93,8 @@ public static class ExhaustMapOperator
                                 subscriber.OnCompleted();
                             }
                         });
+                    innerSubscription.Disposable = newInnerSubscriber;
+                    inner.Subscribe(newInnerSubscriber);
                 },
                 onError: subscriber.OnError,
                 onComplete: () =>

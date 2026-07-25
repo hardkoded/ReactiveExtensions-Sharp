@@ -58,7 +58,8 @@ public static class SwitchMapOperator
                 }
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     Observable<TResult> inner;
@@ -76,7 +77,14 @@ public static class SwitchMapOperator
                     // inner subscription actually torn down before starting the new one.
                     innerSubscription.Disposable?.Dispose();
                     hasInner = true;
-                    innerSubscription.Disposable = inner.Subscribe(
+
+                    // Built directly and assigned into the (already-registered-with-`subscriber`) slot BEFORE
+                    // `inner.Subscribe` runs, so a fully-synchronous inner is stopped mid-loop by a downstream
+                    // disposal instead of only after Subscribe returns. `innerSubscription` itself is a single,
+                    // reused slot added to `subscriber` once for the operator's whole lifetime (see below), so no
+                    // matching Remove is needed per switch — reassigning it is enough.
+                    Subscriber<TResult>? newInnerSubscriber = null;
+                    newInnerSubscriber = Subscriber.Create<TResult>(
                         onNext: subscriber.OnNext,
                         onError: subscriber.OnError,
                         onComplete: () =>
@@ -84,6 +92,8 @@ public static class SwitchMapOperator
                             hasInner = false;
                             CheckComplete();
                         });
+                    innerSubscription.Disposable = newInnerSubscriber;
+                    inner.Subscribe(newInnerSubscriber);
                 },
                 onError: subscriber.OnError,
                 onComplete: () =>
