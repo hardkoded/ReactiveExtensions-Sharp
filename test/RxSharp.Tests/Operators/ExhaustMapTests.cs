@@ -150,11 +150,27 @@ public class ExhaustMapTests
         Assert.That(results, Is.EqualTo(new[] { 1 }));
     }
 
-    // rxjs's two "should stop listening to a synchronous observable when unsubscribed" tests are not ported
-    // here. The first pairs exhaustMap with `takeWhile`, which this port doesn't implement. The second (a
-    // hand-rolled loop-based source piped through exhaustMap + take(3)) hits the same pre-existing,
-    // documented gap noted in AuditTests.cs/DebounceTests.cs/ThrottleTests.cs/WindowCountTests.cs: ExhaustMap
-    // sits as an intermediate operator between the raw source and Take, and this port's disposal-linking only
-    // takes effect once the nested synchronous Subscribe call unwinds -- i.e. after the loop already ran to
-    // completion. Reproducible with Take alone (see CLAUDE.md's Learnings), not specific to ExhaustMap.
+    // rxjs's two "should stop listening to a synchronous observable when unsubscribed" tests are represented
+    // here by the Take(3) variant below, matching the idiom used across this port's own disposal-cascade
+    // regression tests (see CLAUDE.md Learnings and DisposalCascadeTests.cs). This now passes: ExhaustMap's
+    // outer source subscription is registered as a child of its downstream subscriber (via SubscribeChild)
+    // before the source's own Subscribe call runs, so a downstream Take completing cascades back and stops the
+    // loop mid-iteration instead of only after the whole synchronous call stack unwinds.
+    [Test]
+    public void ShouldCascadeDisposalToASynchronousSourceThroughTake()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.ExhaustMap(x => Observable.Of(x)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

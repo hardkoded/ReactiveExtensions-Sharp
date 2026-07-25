@@ -60,7 +60,8 @@ public static class MergeMapOperator
                 }
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     Observable<TResult> inner;
@@ -75,15 +76,23 @@ public static class MergeMapOperator
                     }
 
                     activeCount++;
-                    var innerSubscription = inner.Subscribe(
+
+                    // Built directly (not via Subscribe's return value) and registered with `subscriber` before
+                    // `inner.Subscribe` runs, so a fully-synchronous inner is stopped mid-loop by a downstream
+                    // disposal instead of only after Subscribe returns. Removed again once it naturally completes,
+                    // so `subscriber`'s finalizer list doesn't grow unboundedly across a long-running merge.
+                    Subscriber<TResult>? innerSubscriber = null;
+                    innerSubscriber = Subscriber.Create<TResult>(
                         onNext: subscriber.OnNext,
                         onError: subscriber.OnError,
                         onComplete: () =>
                         {
                             activeCount--;
+                            subscriber.Remove(innerSubscriber!);
                             CheckComplete();
                         });
-                    subscriber.Add(innerSubscription);
+                    subscriber.Add(innerSubscriber);
+                    inner.Subscribe(innerSubscriber);
                 },
                 onError: subscriber.OnError,
                 onComplete: () =>
