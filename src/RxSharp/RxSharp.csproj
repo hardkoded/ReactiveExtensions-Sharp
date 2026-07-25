@@ -7,14 +7,14 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>RxSharp</PackageId>
+    <PackageId>ReactiveExtensionsSharp</PackageId>
     <Title>RxSharp</Title>
     <Authors>Darío Kondratiuk</Authors>
     <Description>A .NET port of RxJS (Reactive Extensions for JavaScript).</Description>
     <PackageTags>rxjs;reactive;observable;rx;async</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/hardkoded/rxjs-sharp</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/hardkoded/rxjs-sharp</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</RepositoryUrl>
     <PackageVersion>0.1.0</PackageVersion>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>

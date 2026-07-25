@@ -1,6 +1,6 @@
 # RxSharp
 
-A .NET port of RxJS. Package/namespace: `RxSharp`. Repo: `Rx-Sharp` (directory on disk may still be named `rxjs-sharp`).
+A .NET port of RxJS. C# namespace: `RxSharp`. NuGet PackageId: `ReactiveExtensionsSharp` (the plain `RxSharp` package name was already taken on nuget.org). GitHub repo: `hardkoded/ReactiveExtensions-Sharp` (directory on disk may still be named `rxjs-sharp`).
 
 ## Why this exists
 

@@ -1,7 +1,7 @@
 # RxSharp
 
-[![build](https://github.com/hardkoded/rxjs-sharp/actions/workflows/build.yml/badge.svg)](https://github.com/hardkoded/rxjs-sharp/actions/workflows/build.yml)
-[![NuGet](https://img.shields.io/nuget/v/RxSharp.svg)](https://www.nuget.org/packages/RxSharp/)
+[![build](https://github.com/hardkoded/ReactiveExtensions-Sharp/actions/workflows/build.yml/badge.svg)](https://github.com/hardkoded/ReactiveExtensions-Sharp/actions/workflows/build.yml)
+[![NuGet](https://img.shields.io/nuget/v/ReactiveExtensionsSharp.svg)](https://www.nuget.org/packages/ReactiveExtensionsSharp/)
 
 A .NET port of [RxJS](https://rxjs.dev/) — same operators, same semantics, same names you already know, in idiomatic C#.
 
@@ -37,7 +37,7 @@ Observable.Timer(TimeSpan.FromSeconds(1))
     .TakeUntil(clicks)
     .Subscribe(x => Console.WriteLine(x));
 ```
-<sup><a href='https://github.com/hardkoded/rxjs-sharp/blob/main/test/RxSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
+<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Status
@@ -55,7 +55,7 @@ See open issues for what's actively being ported next.
 ## Install
 
 ```
-dotnet add package RxSharp
+dotnet add package ReactiveExtensionsSharp
 ```
 
 (Not yet published — coming with the first tagged release.)

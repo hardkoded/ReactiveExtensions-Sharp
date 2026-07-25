@@ -20,6 +20,6 @@ Observable.Interval(TimeSpan.FromSeconds(1))
 
 ## Links
 
-* [GitHub](https://github.com/hardkoded/rxjs-sharp)
+* [GitHub](https://github.com/hardkoded/ReactiveExtensions-Sharp)
 * [API Documentation](api/index.md)
-* [Issues](https://github.com/hardkoded/rxjs-sharp/issues)
+* [Issues](https://github.com/hardkoded/ReactiveExtensions-Sharp/issues)
