@@ -1,5 +1,6 @@
 using RxSharp.Operators;
 using RxSharp.Subjects;
+using RxSharp.Testing;
 
 namespace RxSharp.Tests.Operators;
 
@@ -26,6 +27,28 @@ public class DebounceTimeTests
 
         Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
         Assert.That(results, Is.EqualTo(new[] { 3 }));
+    }
+
+    // Same scenario as above, but via TestScheduler: proves each burst value cancels/restarts the pending timer
+    // (not just "eventually only 3 comes out", but "exactly one value, at exactly frame 30 — the cancelled
+    // timers for 1 and 2 never fire").
+    [Test]
+    public void ShouldEmitOnlyTheMostRecentValueAfterABurstGoesQuiet_UsingVirtualTime()
+    {
+        var scheduler = new TestScheduler();
+        var source = new Subject<int>();
+        var due = TimeSpan.FromTicks(30);
+
+        var results = scheduler.Record(source.AsObservable().DebounceTime(due, scheduler));
+
+        source.OnNext(1);
+        source.OnNext(2);
+        source.OnNext(3);
+
+        Assert.That(results, Is.Empty, "should not emit synchronously, even mid-burst");
+        scheduler.Start();
+
+        Assert.That(results, Is.EqualTo(new[] { Recorded.OnNext(due, 3) }));
     }
 
     [Test]

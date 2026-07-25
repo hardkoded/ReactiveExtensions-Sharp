@@ -1,4 +1,5 @@
 using RxSharp.Operators;
+using RxSharp.Testing;
 
 namespace RxSharp.Tests.Operators;
 
@@ -104,5 +105,32 @@ public class RetryTests
         Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
         Assert.That(attempts, Has.Count.EqualTo(2));
         Assert.That((attempts[1] - attempts[0]).TotalMilliseconds, Is.GreaterThanOrEqualTo(40));
+    }
+
+    // Same scenario as above, but via TestScheduler: proves the retry attempt happens at exactly the given
+    // delay — not merely "at least 40ms later" (the best a real-timer test can assert), but "at frame 50, not
+    // one frame before".
+    [Test]
+    public void ShouldWaitForTheDelayBeforeRetrying_UsingVirtualTime()
+    {
+        var scheduler = new TestScheduler();
+        var attempts = new List<TimeSpan>();
+        var source = Observable.Defer<int>(() =>
+        {
+            attempts.Add(scheduler.Clock);
+            return attempts.Count == 1
+                ? Observable.ThrowError<int>(() => new InvalidOperationException("boom"))
+                : Observable.Of(1);
+        });
+
+        var due = TimeSpan.FromTicks(50);
+        var results = scheduler.Record(source.Retry(1, due, scheduler));
+
+        Assert.That(attempts, Is.EqualTo(new[] { TimeSpan.Zero }), "the first attempt happens synchronously on subscribe");
+
+        scheduler.Start();
+
+        Assert.That(attempts, Is.EqualTo(new[] { TimeSpan.Zero, due }), "the retry should happen at exactly frame 50, not before and not after");
+        Assert.That(results, Is.EqualTo(new[] { Recorded.OnNext(due, 1), Recorded.OnCompleted<int>(due) }));
     }
 }
