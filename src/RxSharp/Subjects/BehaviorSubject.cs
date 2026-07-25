@@ -4,11 +4,14 @@ namespace RxSharp.Subjects;
 /// A <see cref="Subject{T}"/> that requires an initial value and synchronously replays its current value to every
 /// new subscriber. Mirrors rxjs's <c>BehaviorSubject</c>.
 /// </summary>
+/// <typeparam name="T">The type of values pushed through the subject.</typeparam>
 public class BehaviorSubject<T> : Subject<T>
 {
     private readonly object _valueGate = new object();
     private T _value;
 
+    /// <summary>Initializes a new instance of the <see cref="BehaviorSubject{T}"/> class with the given current value.</summary>
+    /// <param name="value">The initial current value, returned by <see cref="Value"/> and replayed to the first subscriber(s) until the next <see cref="OnNext"/>.</param>
     public BehaviorSubject(T value) => _value = value;
 
     /// <summary>
@@ -38,6 +41,8 @@ public class BehaviorSubject<T> : Subject<T>
         }
     }
 
+    /// <summary>Pushes a new current value and forwards it to every observer currently subscribed. A no-op forward once the subject has stopped or been disposed (see <see cref="Subject{T}.OnNext"/>).</summary>
+    /// <param name="value">The new current value.</param>
     public override void OnNext(T value)
     {
         // Only track the value while still live: rxjs's own BehaviorSubject technically keeps mutating its
@@ -55,6 +60,9 @@ public class BehaviorSubject<T> : Subject<T>
         base.OnNext(value);
     }
 
+    /// <summary>Subscribes <paramref name="observer"/> and, unless the subject had already terminated, immediately replays the current value to it.</summary>
+    /// <param name="observer">The observer to subscribe.</param>
+    /// <returns>A disposable that unsubscribes <paramref name="observer"/>, per <see cref="Subject{T}.Subscribe(IObserver{T})"/>.</returns>
     public override IDisposable Subscribe(IObserver<T> observer)
     {
         var subscription = base.Subscribe(observer);

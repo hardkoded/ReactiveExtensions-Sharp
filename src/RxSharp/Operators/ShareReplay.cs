@@ -2,6 +2,7 @@ using RxSharp.Subjects;
 
 namespace RxSharp.Operators;
 
+/// <summary>Implements the <c>ShareReplay</c> operator. Mirrors rxjs's <c>shareReplay()</c>.</summary>
 public static class ShareReplayOperator
 {
     /// <summary>
@@ -22,6 +23,10 @@ public static class ShareReplayOperator
     /// there's no knob to opt into the leaky default.
     /// </para>
     /// </summary>
+    /// <typeparam name="T">The element type of the source observable.</typeparam>
+    /// <param name="source">The source observable to multicast.</param>
+    /// <param name="bufferSize">The maximum number of most-recent values to replay to each new subscriber. Unbounded by default.</param>
+    /// <returns>A multicast, replaying observable that shares one subscription to <paramref name="source"/> among all its subscribers.</returns>
     public static Observable<T> ShareReplay<T>(this Observable<T> source, int bufferSize = int.MaxValue)
         => ShareCore.Multicast(source, () => new ReplaySubject<T>(bufferSize), resetOnComplete: false);
 }
