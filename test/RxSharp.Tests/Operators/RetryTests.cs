@@ -133,4 +133,58 @@ public class RetryTests
         Assert.That(attempts, Is.EqualTo(new[] { TimeSpan.Zero, due }), "the retry should happen at exactly frame 50, not before and not after");
         Assert.That(results, Is.EqualTo(new[] { Recorded.OnNext(due, 1), Recorded.OnCompleted<int>(due) }));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): a fully-synchronous,
+    // self-checking source composed with Retry and an early-completing Take must stop mid-loop, not just once
+    // the whole synchronous call stack unwinds. This attempt never errors, so it exercises the "current attempt"
+    // subscription being registered as a child of the downstream subscriber before Retry subscribes to it.
+    [Test]
+    public void ShouldCascadeDisposalThroughARetryAttemptThatNeverErrors()
+    {
+        var sideEffects = new List<int>();
+        var source = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.Retry().Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
+    // Regression test proving Retry stops recursing into new attempts once downstream has unsubscribed, instead
+    // of ignoring that fact and recursing forever for a rapidly, synchronously erroring source (a real
+    // StackOverflowException risk without the fix). Also proves the per-attempt inner subscription is correctly
+    // registered as a child of the downstream subscriber, since disposing that downstream subscriber is what
+    // must stop the recursion.
+    [Test]
+    public void ShouldStopRetryingOnceDownstreamUnsubscribes()
+    {
+        var attempts = 0;
+
+        // Built and assigned directly (rather than relying on the return value of `.Subscribe(...)`, which for
+        // a fully-synchronous, immediately-erroring source with unlimited retries would never be assigned in
+        // time — the very bug this whole fix is about) so it can be disposed synchronously, mid-recursion, from
+        // inside the source itself.
+        Subscriber<int> topSubscriber = null!;
+        var source = new Observable<int>(subscriber =>
+        {
+            attempts++;
+            if (attempts == 5)
+            {
+                topSubscriber.Dispose();
+            }
+
+            subscriber.OnError(new InvalidOperationException("boom"));
+        });
+
+        topSubscriber = Subscriber.Create<int>(onError: _ => { });
+        source.Retry().Subscribe(topSubscriber);
+
+        Assert.That(attempts, Is.EqualTo(5));
+    }
 }

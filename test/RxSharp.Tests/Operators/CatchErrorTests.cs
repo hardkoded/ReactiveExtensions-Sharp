@@ -90,4 +90,50 @@ public class CatchErrorTests
 
         Assert.That(results, Is.EqualTo(new[] { 1, 2 }));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): a fully-synchronous,
+    // self-checking source composed with CatchError and an early-completing Take must stop mid-loop, not just
+    // once the whole synchronous call stack unwinds. This source never errors, so it exercises the "before the
+    // first error" source subscription being registered as a child of the downstream subscriber.
+    [Test]
+    public void ShouldCascadeDisposalThroughTheSourceBeforeAnyError()
+    {
+        var sideEffects = new List<int>();
+        var source = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.CatchError(_ => Observable.Of(-1)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
+    // Same cascade property, but through the replacement observable subscribed to after the source errors —
+    // proves the replacement (which reuses the downstream subscriber directly, see CatchError.cs) also stops a
+    // fully-synchronous replacement mid-loop.
+    [Test]
+    public void ShouldCascadeDisposalThroughTheReplacementObservable()
+    {
+        var sideEffects = new List<int>();
+        var replacement = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        Observable.ThrowError<int>(() => new InvalidOperationException("boom"))
+            .CatchError(_ => replacement)
+            .Take(3)
+            .Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

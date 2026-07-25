@@ -1,3 +1,4 @@
+using System.Reflection;
 using RxSharp.Operators;
 using RxSharp.Subjects;
 
@@ -135,6 +136,58 @@ public class GroupByTests
 
         Assert.That(outerCompleted, Is.True);
         Assert.That(completedGroups, Is.EquivalentTo(new[] { 1, 0 }));
+    }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): a fully-synchronous, self-checking
+    // source composed with GroupBy and an early-completing Take on the *outer* stream of groups must stop
+    // mid-loop, not just once the whole synchronous call stack unwinds. Every value gets a distinct (counter
+    // derived) key, matching the "key cardinality could be unbounded" scenario CLAUDE.md calls out explicitly.
+    [Test]
+    public void ShouldCascadeDisposalThroughTheOuterGroupStream()
+    {
+        var sideEffects = new List<int>();
+        var source = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.GroupBy(x => x).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
+    // Regression test proving the per-key duration-notifier subscription is Remove()'d from the outer
+    // subscriber's finalizer list once its group closes, instead of accumulating forever — the exact "unbounded
+    // key cardinality" leak scenario CLAUDE.md calls out for GroupBy. Every source value gets its own key and
+    // its own duration notifier that emits-then-completes synchronously (closing the group immediately), so
+    // after many values the finalizer list must stay small, not grow proportionally with the number of groups.
+    [Test]
+    public void ShouldNotLeakDurationNotifierSubscriptionsAcrossManyGroups()
+    {
+        var source = new Subject<int>();
+        var closed = 0;
+
+        var subscription = source.AsObservable()
+            .GroupBy(x => x, x => x, _ => Observable.Of(Unit.Default))
+            .Subscribe(group => group.Subscribe(onComplete: () => closed++));
+
+        for (var i = 0; i < 500; i++)
+        {
+            source.OnNext(i);
+        }
+
+        var finalizersField = typeof(Subscription).GetField("_finalizers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var finalizers = (List<IDisposable>?)finalizersField.GetValue(subscription);
+
+        Assert.That(closed, Is.EqualTo(500));
+        Assert.That(
+            finalizers is null ? 0 : finalizers.Count,
+            Is.LessThan(10),
+            "duration-notifier subscriptions must be Remove()'d once their group closes, not left to accumulate forever");
     }
 
     private static T PopFirst<T>(List<T> values)
