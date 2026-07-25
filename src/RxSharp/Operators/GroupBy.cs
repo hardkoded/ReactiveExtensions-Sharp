@@ -74,7 +74,7 @@ public static class GroupByOperator
             // whole lifetime of the operator (never replaced) — see OperatorHelper.SubscribeChild's doc comment.
             // This lets a downstream disposal (e.g. Take on the outer stream of groups) cascade up and stop a
             // fully-synchronous source mid-loop, instead of only once the whole synchronous call stack unwinds.
-            src.SubscribeChild(
+            return src.SubscribeChild(
                 subscriber,
                 onNext: value =>
                 {
@@ -164,7 +164,5 @@ public static class GroupByOperator
 
                     subscriber.OnCompleted();
                 });
-
-            return null;
         });
 }
