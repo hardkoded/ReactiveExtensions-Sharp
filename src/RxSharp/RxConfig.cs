@@ -16,5 +16,6 @@ public static class RxConfig
     /// </summary>
     public static Action<Exception> OnUnhandledError { get; set; } = DefaultUnhandledErrorHandler;
 
+    /// <summary>Restores <see cref="OnUnhandledError"/> to its default behavior (queuing the exception to re-throw on the thread pool). Useful for tests that temporarily override the hook.</summary>
     public static void ResetOnUnhandledError() => OnUnhandledError = DefaultUnhandledErrorHandler;
 }

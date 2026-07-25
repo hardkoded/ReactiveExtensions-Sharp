@@ -1,0 +1,33 @@
+name: Publish to NuGet
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build src/RxSharp/RxSharp.csproj --configuration Release --no-restore
+
+      - name: Push to nuget.org
+        env:
+          NUGET_TOKEN_EXISTS: ${{ secrets.NUGET_API_KEY }}
+        if: env.NUGET_TOKEN_EXISTS != ''
+        run: dotnet nuget push ./src/RxSharp/bin/Release/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json

@@ -24,25 +24,31 @@ interval(1000)
   .subscribe(x => console.log(x));
 ```
 
-```csharp
-// RxSharp
-var clicks = Observable.FromEvent(button, nameof(button.Click));
+RxSharp doesn't have `interval` yet, so the C# equivalent below uses `Timer` (a single-shot analog) — real, compiling code, not pseudocode:
 
-Observable.Interval(TimeSpan.FromSeconds(1))
+<!-- snippet: quick-taste-csharp -->
+<a id='snippet-quick-taste-csharp'></a>
+```cs
+var clicks = Observable.FromEvent<EventArgs>(h => button.Click += h, h => button.Click -= h);
+
+Observable.Timer(TimeSpan.FromSeconds(1))
     .Map(x => x * x)
     .Filter(x => x % 2 == 0)
     .TakeUntil(clicks)
     .Subscribe(x => Console.WriteLine(x));
 ```
+<sup><a href='https://github.com/hardkoded/rxjs-sharp/blob/main/test/RxSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 ## Status
 
-Early and under active development. Ported test-for-test against [RxJS 7.8.2](https://github.com/ReactiveX/rxjs/tree/7.8.2)'s own spec suite, operator by operator.
+Under active development. Ported test-for-test against [RxJS 7.8.2](https://github.com/ReactiveX/rxjs/tree/7.8.2)'s own spec suite, operator by operator.
 
 - ✅ Core engine: `Observable<T>`, `Subscriber<T>`, `Subscription`, `Subject<T>`, `ReplaySubject<T>`
-- 🚧 Broad operator coverage (transformation, filtering, combination, error handling)
-- 🚧 `RxSharp.Extras` — combinators for real-world async/cancellation patterns (timeout, retry+race, event bridging), lifted from how [Puppeteer](https://pptr.dev/) itself uses rxjs internally
-- ⏳ Schedulers, marble/`TestScheduler`-style testing, full parity long tail
+- ✅ The full Puppeteer-essential operator surface — every creation function, operator, and async bridge (`firstValueFrom`/`lastValueFrom`) that Puppeteer itself funnels its rxjs usage through
+- ✅ `RxSharp.Extras` — combinators for real-world async/cancellation patterns (`Timeout`, `RetryAndRaceWithSignalAndTimer`, `FromCancellationToken`, `FilterAsync`), lifted from how [Puppeteer](https://pptr.dev/) itself uses rxjs internally
+- ✅ Validated end-to-end against a real, launched Chrome in a throwaway `puppeteer-sharp` playground branch — not just synthetic unit tests
+- 🚧 M4 (current): full XML docs, DocFX site, schedulers beyond `TaskPoolScheduler`, marble/`TestScheduler`-style testing, and the remaining long-tail operators beyond the Puppeteer-essential list (e.g. `interval`, `groupBy`, `window*`, `share`/`shareReplay`, `BehaviorSubject`/`AsyncSubject`)
 
 See open issues for what's actively being ported next.
 

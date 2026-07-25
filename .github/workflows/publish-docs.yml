@@ -1,0 +1,46 @@
+name: Publish docs
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  build:
+    name: Publish docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build docs
+        run: |
+          dotnet tool install --global docfx --version 2.74.1
+          docfx metadata docfx_project/docfx.json
+          docfx build docfx_project/docfx.json
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Publish documentation on GitHub Pages
+        uses: actions/deploy-pages@v4
+        id: deployment
