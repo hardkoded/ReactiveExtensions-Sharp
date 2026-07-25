@@ -58,9 +58,11 @@ Explicitly low priority for now: `Subject`/`BehaviorSubject`/`AsyncSubject` beyo
 
 ## Milestones
 
-See the original plan for full detail. Summary: M0 scaffolding (done) → M1 core engine + first operator slice (done) → M2 broad operator/creation-function expansion + `RxSharp.Extras` + `PuppeteerScenarios` tests (done: the entire Puppeteer-essential surface is implemented — scheduler seam, all creation functions, all listed operators, `RxSharp.Extras`, and the end-to-end `RetryAndRaceWithSignalAndTimer` test) → M3 playground validation against a throwaway branch of puppeteer-sharp → M4 long tail (schedulers, marble testing, docs/CI polish, remaining full-parity operators beyond the essential list).
+See the original plan for full detail. Summary: M0 scaffolding (done) → M1 core engine + first operator slice (done) → M2 broad operator/creation-function expansion + `RxSharp.Extras` + `PuppeteerScenarios` tests (done: the entire Puppeteer-essential surface is implemented — scheduler seam, all creation functions, all listed operators, `RxSharp.Extras`, and the end-to-end `RetryAndRaceWithSignalAndTimer` test) → M3 playground validation against a throwaway branch of puppeteer-sharp (done, see below) → M4 long tail (schedulers, marble testing, docs/CI polish, remaining full-parity operators beyond the essential list).
 
-No GitHub remote yet by explicit choice ("let's work local now") — milestones land as local feature branches merged into `main` with `--no-ff`, not real PRs, until that changes.
+**M3 result**: a git worktree at `/Users/dario/Code/hardkoded/puppeteer-sharp-rx-playground` (branch `experiment/rxjs-sharp-playground`, off `origin/master`, local-only/unpushed) with a throwaway `lib/PuppeteerSharp.RxPlayground.Tests/` project (not in `PuppeteerSharp.sln`, not wired into CI). All 4 tests pass against a real launched Chrome (auto-downloaded via `BrowserFetcher` in a `[SetUpFixture]`, same pattern puppeteer-sharp's own test suite uses): a `Locator`-style click helper built entirely from `Observable.Defer` + `RetryAndRaceWithSignalAndTimer` retries until a delayed-appearing element exists and clicks it, and correctly times out with `TimeoutException` when the element never appears; `Observable.FromEvent` correctly wraps both a real `EventHandler<ConsoleEventArgs>` event (`IPage.Console`) and a real plain `EventHandler` event (`IPage.Load`). This is real end-to-end proof the port's API works for its intended purpose, not just synthetic unit tests.
+
+No GitHub remote yet for rxjs-sharp by explicit choice ("let's work local now") — milestones land as local feature branches merged into `main` with `--no-ff`, not real PRs, until that changes.
 
 ## Learnings
 
