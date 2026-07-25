@@ -53,6 +53,16 @@ public static class OperatorHelper
     /// creates a new inner subscription per value or per cycle (`MergeMap`, `SwitchMap`, `Debounce`, `Window*`, ...)
     /// needs to also call <see cref="Subscription.Remove"/> once each inner subscription naturally ends, or the
     /// downstream subscriber's finalizer list grows unboundedly — this helper does not do that for you.
+    /// <para>
+    /// Deliberately returns <see langword="null"/>, not the inner subscription: the inner subscriber is already
+    /// registered as a child of <paramref name="downstream"/> above, so if a caller did <c>return
+    /// src.SubscribeChild(...)</c> as the tail expression of an <see cref="Operate{TSource, TResult}"/> callback and
+    /// this method returned the inner subscriber, <see cref="Observable{T}.Subscribe(IObserver{T})"/> would add that
+    /// same object to <paramref name="downstream"/> a second time (it adds whatever the callback returns as a
+    /// teardown). Harmless in practice (disposing a <see cref="Subscription"/> twice is a no-op) but a wasted,
+    /// permanent duplicate entry in the finalizer list for the operator's whole lifetime — returning <see
+    /// langword="null"/> here is what keeps that list to exactly one entry per inner subscription.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TSource">The element type of the source observable.</typeparam>
     /// <typeparam name="TResult">The element type of the downstream subscriber (usually unrelated to the callback signatures, just needed to type <paramref name="downstream"/>).</typeparam>
@@ -61,8 +71,8 @@ public static class OperatorHelper
     /// <param name="onNext">Called for each value from <paramref name="source"/>.</param>
     /// <param name="onError">Called if <paramref name="source"/> errors.</param>
     /// <param name="onComplete">Called when <paramref name="source"/> completes.</param>
-    /// <returns>The inner subscriber, already subscribed and already registered as a child of <paramref name="downstream"/>.</returns>
-    public static IDisposable SubscribeChild<TSource, TResult>(
+    /// <returns><see langword="null"/>, always — see the remarks above for why.</returns>
+    public static IDisposable? SubscribeChild<TSource, TResult>(
         this Observable<TSource> source,
         Subscriber<TResult> downstream,
         Action<TSource>? onNext = null,
@@ -71,6 +81,7 @@ public static class OperatorHelper
     {
         var innerSubscriber = Subscriber.Create(onNext, onError, onComplete);
         downstream.Add(innerSubscriber);
-        return source.Subscribe(innerSubscriber);
+        source.Subscribe(innerSubscriber);
+        return null;
     }
 }
