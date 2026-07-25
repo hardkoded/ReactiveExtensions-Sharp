@@ -139,6 +139,78 @@ public class ObservableCreationTests
         Assert.That(publisher.HasSubscribers, Is.False);
     }
 
+    [Test]
+    public void Zip_ShouldCombinePositionallyAndCompleteWhenTheShortestSourceIsExhausted()
+    {
+        var results = new List<IReadOnlyList<int>>();
+        var completed = false;
+        Observable.Zip(Observable.Of(1, 2, 3), Observable.Of(10, 20)).Subscribe(results.Add, onComplete: () => completed = true);
+
+        Assert.That(results.Select(r => r.ToArray()), Is.EqualTo(new[] { new[] { 1, 10 }, new[] { 2, 20 } }));
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void ForkJoin_ShouldEmitTheLastValueOfEachSourceOnceAllHaveCompleted()
+    {
+        var subjectA = new RxSharp.Subjects.Subject<int>();
+        var subjectB = new RxSharp.Subjects.Subject<int>();
+        var results = new List<IReadOnlyList<int>>();
+
+        Observable.ForkJoin(subjectA.AsObservable(), subjectB.AsObservable()).Subscribe(results.Add);
+
+        subjectA.OnNext(1);
+        subjectA.OnNext(2);
+        subjectA.OnCompleted();
+        Assert.That(results, Is.Empty, "shouldn't emit until every source has completed");
+
+        subjectB.OnNext(10);
+        subjectB.OnCompleted();
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0], Is.EqualTo(new[] { 2, 10 }));
+    }
+
+    [Test]
+    public void ForkJoin_ShouldCompleteWithoutEmittingIfAnySourceNeverEmitsAValue()
+    {
+        var results = new List<IReadOnlyList<int>>();
+        var completed = false;
+        Observable.ForkJoin(Observable.Of(1), Observable.Empty<int>()).Subscribe(results.Add, onComplete: () => completed = true);
+
+        Assert.That(results, Is.Empty);
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void CombineLatest_ShouldEmitOnEveryEmissionOnceAllSourcesHaveEmittedAtLeastOnce()
+    {
+        var subjectA = new RxSharp.Subjects.Subject<int>();
+        var subjectB = new RxSharp.Subjects.Subject<string>();
+        var results = new List<IReadOnlyList<object>>();
+
+        Observable.CombineLatest<object>(subjectA.AsObservable().Map(x => (object)x), subjectB.AsObservable().Map(x => (object)x))
+            .Subscribe(results.Add);
+
+        subjectA.OnNext(1);
+        Assert.That(results, Is.Empty, "B hasn't emitted yet");
+
+        subjectB.OnNext("x");
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0], Is.EqualTo(new object[] { 1, "x" }));
+
+        subjectA.OnNext(2);
+        Assert.That(results[1], Is.EqualTo(new object[] { 2, "x" }));
+    }
+
+    [Test]
+    public void Identity_ShouldReturnItsArgumentUnchanged()
+        => Assert.That(Observable.Identity(42), Is.EqualTo(42));
+
+    [Test]
+    public void Noop_ShouldNotThrow()
+        => Assert.DoesNotThrow(() => Observable.Noop());
+
     private sealed class TestEventPublisher
     {
         public event EventHandler<int>? Changed;
