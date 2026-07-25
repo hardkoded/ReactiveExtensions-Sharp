@@ -54,4 +54,19 @@ public static class Observable
     public static Observable<T> Never<T>() => new Observable<T>(_ => { });
 
     public static Observable<T> ThrowError<T>(Func<Exception> errorFactory) => new Observable<T>(subscriber => subscriber.OnError(errorFactory()));
+
+    public static Observable<long> Timer(TimeSpan dueTime, IScheduler? scheduler = null) => new Observable<long>(subscriber =>
+    {
+        var activeScheduler = scheduler ?? TaskPoolScheduler.Instance;
+        return activeScheduler.Schedule(
+            () =>
+            {
+                subscriber.OnNext(0L);
+                subscriber.OnCompleted();
+            },
+            dueTime);
+    });
+
+    public static Observable<T> Race<T>(params Observable<T>[] sources) => new Observable<T>(subscriber => RaceCore.Subscribe(sources, subscriber));
 }
+
