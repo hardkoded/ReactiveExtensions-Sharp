@@ -91,6 +91,46 @@ public class WindowTests
         Assert.That(outerError, Is.SameAs(error));
     }
 
+    // Regression tests for the disposal-cascade fix (see CLAUDE.md Learnings): both the source subscription and the
+    // boundary subscription are single-stable-for-the-operator's-lifetime, so both must be registered as children
+    // of the downstream subscriber via SubscribeChild *before* being subscribed, not only after Subscribe returns.
+    private static Observable<int> SynchronousObservable(List<int> sideEffects)
+        => new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+    [Test]
+    public void ShouldCascadeDisposalToTheSourceBeforeItIsEverSubscribed()
+    {
+        // Window emits its first window eagerly, before the source is ever subscribed. Take(1) on the outer
+        // stream therefore disposes the downstream subscriber right there -- before src.SubscribeChild(...) even
+        // runs -- so the self-checking source must never get to execute a single loop iteration.
+        var sideEffects = new List<int>();
+
+        SynchronousObservable(sideEffects).Window(Observable.Never<int>()).Take(1).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.Empty);
+    }
+
+    [Test]
+    public void ShouldCascadeDisposalToTheActiveBoundarySubscription()
+    {
+        // Use the self-checking source as the *boundary* instead, so its loop runs synchronously while windows
+        // are actively being opened. Take(3) on the outer stream counts the eager first window (opened before
+        // the boundary is even subscribed) plus two boundary-driven reopens, and must cascade into stopping the
+        // boundary's own loop mid-iteration.
+        var sideEffects = new List<int>();
+
+        Observable.Never<int>().Window(SynchronousObservable(sideEffects)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1 }));
+    }
+
     [Test]
     public void ShouldCompleteTheResultingObservableWhenBoundaryCompletes()
     {

@@ -9,9 +9,11 @@ public static class BufferWhenOperator
     /// Mirrors rxjs's <c>bufferWhen</c>. Same closing-selector idea as
     /// <see cref="WindowWhenOperator.WindowWhen{T, TBoundary}"/>, but collecting into arrays instead of live windows;
     /// see its remarks for why each closing-notifier subscription is built directly via <see cref="Subscriber.Create{T}"/>
-    /// assigned before subscribing, rather than a reassigned <see cref="SingleAssignmentDisposable"/>. The first
-    /// buffer opens eagerly at subscription time; <paramref name="closingSelector"/> is invoked again, and its
-    /// result subscribed to afresh, every time a new buffer opens.
+    /// assigned before subscribing, rather than a reassigned <see cref="SingleAssignmentDisposable"/>, and for why
+    /// each closing-notifier subscriber is also registered as a child of <paramref name="source"/>'s downstream
+    /// subscriber before being subscribed and removed again once superseded. The first buffer opens eagerly at
+    /// subscription time; <paramref name="closingSelector"/> is invoked again, and its result subscribed to afresh,
+    /// every time a new buffer opens.
     /// </summary>
     /// <typeparam name="T">The type of the elements collected into each buffer.</typeparam>
     /// <typeparam name="TBoundary">The (unused) element type of the closing-notifier observable.</typeparam>
@@ -26,7 +28,11 @@ public static class BufferWhenOperator
 
             void OpenBuffer()
             {
-                closingSubscriber?.Dispose();
+                if (closingSubscriber is { } previous)
+                {
+                    subscriber.Remove(previous);
+                    previous.Dispose();
+                }
 
                 var closed = buffer;
                 buffer = new List<T>();
@@ -46,16 +52,19 @@ public static class BufferWhenOperator
                     return;
                 }
 
-                closingSubscriber = Subscriber.Create<TBoundary>(
+                var newClosingSubscriber = Subscriber.Create<TBoundary>(
                     onNext: _ => OpenBuffer(),
                     onError: subscriber.OnError,
                     onComplete: OpenBuffer);
-                closingNotifier.Subscribe(closingSubscriber);
+                closingSubscriber = newClosingSubscriber;
+                subscriber.Add(newClosingSubscriber);
+                closingNotifier.Subscribe(newClosingSubscriber);
             }
 
             OpenBuffer();
 
-            var sourceSubscription = src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value => buffer?.Add(value),
                 onError: subscriber.OnError,
                 onComplete: () =>
@@ -67,8 +76,5 @@ public static class BufferWhenOperator
 
                     subscriber.OnCompleted();
                 });
-            subscriber.Add(sourceSubscription);
-
-            return new Subscription(() => closingSubscriber?.Dispose());
         });
 }

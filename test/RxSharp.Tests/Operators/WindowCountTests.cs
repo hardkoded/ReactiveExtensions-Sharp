@@ -84,9 +84,27 @@ public class WindowCountTests
         Assert.That(outerError, Is.SameAs(error));
     }
 
-    // rxjs's "should stop listening to a synchronous observable when unsubscribed" test is not ported here:
-    // it relies on a `Take`-driven synchronous unsubscribe interrupting a still-running upstream `Subscribe`
-    // call, which this port's `SingleAssignmentDisposable`-based teardown does not support yet (the disposal
-    // only takes effect once the nested synchronous `Subscribe` call unwinds, i.e. after it already ran to
-    // completion) — a pre-existing gap in `Take` itself, reproducible with `Take` alone, not specific to `WindowCount`.
+    // rxjs's "should stop listening to a synchronous observable when unsubscribed" test, now that WindowCount's
+    // source subscription is registered as a child of its downstream subscriber (via SubscribeChild) before being
+    // subscribed, instead of only after Subscribe returns. WindowCount(1) opens a new window on every value, and
+    // the eager first window counts as the first Take emission, so Take(2) disposes as soon as the *second*
+    // window opens (i.e. right after the first source value is processed), which must cascade back to stop the
+    // source's own loop before it emits a second value.
+    [Test]
+    public void ShouldStopListeningToASynchronousSourceWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.WindowCount(1).Take(2).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0 }));
+    }
 }

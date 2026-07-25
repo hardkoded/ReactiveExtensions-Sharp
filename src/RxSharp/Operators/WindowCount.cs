@@ -33,7 +33,8 @@ public static class WindowCountOperator
             windows.Add(firstWindow);
             subscriber.OnNext(firstWindow.AsObservable());
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     foreach (var window in windows)

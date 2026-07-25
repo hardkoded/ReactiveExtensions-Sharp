@@ -33,7 +33,8 @@ public static class BufferCountOperator
             var buffers = new List<List<T>>();
             var count = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     List<List<T>>? toEmit = null;

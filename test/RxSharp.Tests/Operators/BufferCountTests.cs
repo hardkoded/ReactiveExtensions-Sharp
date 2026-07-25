@@ -43,4 +43,26 @@ public class BufferCountTests
 
         Assert.That(received, Is.SameAs(error));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): the source subscription must be
+    // registered as a child of the downstream subscriber (via SubscribeChild) *before* being subscribed, so a
+    // downstream disposal cascades into a still-running, fully-synchronous source. BufferCount(1) emits (and
+    // closes) a full buffer on every single value, so Take(1) disposes as soon as the first value is processed.
+    [Test]
+    public void ShouldStopListeningToASynchronousSourceWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.BufferCount(1).Take(1).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0 }));
+    }
 }

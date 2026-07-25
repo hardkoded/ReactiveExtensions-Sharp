@@ -79,4 +79,30 @@ public class BufferTests
 
         Assert.That(received, Is.SameAs(error));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): both the source subscription and the
+    // closing-notifier subscription are single-stable-for-the-operator's-lifetime, so both must be registered as
+    // children of the downstream subscriber via SubscribeChild *before* being subscribed. Buffer never emits
+    // eagerly (unlike Window, a buffer only appears once it closes), so the only way to exercise a synchronous,
+    // self-checking source's mid-loop stop here is to put it in the *notifier* role: each of its values closes
+    // (and emits) the current buffer, so the notifier's own loop runs live while buffers are being produced.
+    private static Observable<int> SynchronousObservable(List<int> sideEffects)
+        => new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+    [Test]
+    public void ShouldCascadeDisposalToTheActiveClosingNotifierSubscription()
+    {
+        var sideEffects = new List<int>();
+
+        Observable.Never<int>().Buffer(SynchronousObservable(sideEffects)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

@@ -19,7 +19,12 @@ public static class WindowWhenOperator
     /// reassigned only after <c>Subscribe</c> returns. This matters here specifically: a closing notifier that emits
     /// and then completes synchronously (e.g. <c>Observable.Of(1)</c>) would otherwise reopen the window twice for a
     /// single notifier, since both the synchronous <c>next</c> and the following <c>complete</c> would each trigger a
-    /// reopen before the naive wrapper-reassignment could take effect.
+    /// reopen before the naive wrapper-reassignment could take effect. Each closing-notifier subscriber is also
+    /// registered as a child of <paramref name="source"/>'s downstream subscriber (via <see cref="Subscription.Add(IDisposable)"/>)
+    /// <em>before</em> it is subscribed — see <see cref="OperatorHelper.SubscribeChild{TSource, TResult}"/> — and
+    /// removed again as soon as it is superseded by the next cycle's, so a downstream disposal cascades into
+    /// whichever closing-notifier subscription is currently active instead of only the latest one leaking forever
+    /// as a dead entry in the downstream subscriber's finalizer list.
     /// </remarks>
     /// <typeparam name="T">The element type of the source.</typeparam>
     /// <typeparam name="TBoundary">The (unused) element type of the closing-notifier observable.</typeparam>
@@ -40,7 +45,12 @@ public static class WindowWhenOperator
 
             void OpenWindow()
             {
-                closingSubscriber?.Dispose();
+                if (closingSubscriber is { } previous)
+                {
+                    subscriber.Remove(previous);
+                    previous.Dispose();
+                }
+
                 window?.OnCompleted();
 
                 window = new Subject<T>();
@@ -57,16 +67,19 @@ public static class WindowWhenOperator
                     return;
                 }
 
-                closingSubscriber = Subscriber.Create<TBoundary>(
+                var newClosingSubscriber = Subscriber.Create<TBoundary>(
                     onNext: _ => OpenWindow(),
                     onError: HandleError,
                     onComplete: OpenWindow);
-                closingNotifier.Subscribe(closingSubscriber);
+                closingSubscriber = newClosingSubscriber;
+                subscriber.Add(newClosingSubscriber);
+                closingNotifier.Subscribe(newClosingSubscriber);
             }
 
             OpenWindow();
 
-            var sourceSubscription = src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value => window?.OnNext(value),
                 onError: HandleError,
                 onComplete: () =>
@@ -74,8 +87,5 @@ public static class WindowWhenOperator
                     window?.OnCompleted();
                     subscriber.OnCompleted();
                 });
-            subscriber.Add(sourceSubscription);
-
-            return new Subscription(() => closingSubscriber?.Dispose());
         });
 }
