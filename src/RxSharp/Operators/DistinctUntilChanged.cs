@@ -65,4 +65,23 @@ public static class DistinctUntilChangedOperator
                 onError: subscriber.OnError,
                 onComplete: subscriber.OnCompleted);
         });
+
+    /// <summary>
+    /// Emits a value from <paramref name="source"/> only when the key computed for it by <paramref name="keySelector"/>
+    /// differs, per <paramref name="comparer"/>, from the key computed for the immediately preceding emitted value.
+    /// </summary>
+    /// <remarks>
+    /// A thin, more strongly-typed wrapper over <see cref="DistinctUntilChanged{T, TKey}(Observable{T}, IEqualityComparer{TKey}, Func{T, TKey})"/>
+    /// &#8212; rxjs's <c>distinctUntilKeyChanged</c> takes a string property-name key (JS objects are dynamically
+    /// typed); this takes a <paramref name="keySelector"/> function instead, the natural C# equivalent. The first
+    /// value is always emitted. If <paramref name="keySelector"/> throws, the exception is forwarded via <c>OnError</c>.
+    /// </remarks>
+    /// <typeparam name="T">The element type of the source observable.</typeparam>
+    /// <typeparam name="TKey">The type of the key extracted from each value for comparison purposes.</typeparam>
+    /// <param name="source">The source observable to filter for consecutive distinct keys.</param>
+    /// <param name="keySelector">A function that extracts the comparison key from each value.</param>
+    /// <param name="comparer">The comparer used to test key equality. Defaults to <see cref="EqualityComparer{TKey}.Default"/> when <see langword="null"/>.</param>
+    /// <returns>An observable that suppresses values whose key matches the previously emitted value's key.</returns>
+    public static Observable<T> DistinctUntilKeyChanged<T, TKey>(this Observable<T> source, Func<T, TKey> keySelector, IEqualityComparer<TKey>? comparer = null)
+        => source.DistinctUntilChanged(comparer ?? EqualityComparer<TKey>.Default, keySelector);
 }
