@@ -150,5 +150,191 @@ public static class Observable
     /// <summary>The common case of <see cref="FromEvent{TDelegate, TEventArgs}"/> for standard <see cref="EventHandler{TEventArgs}"/>-shaped .NET events.</summary>
     public static Observable<TEventArgs> FromEvent<TEventArgs>(Action<EventHandler<TEventArgs>> addHandler, Action<EventHandler<TEventArgs>> removeHandler)
         => FromEvent<EventHandler<TEventArgs>, TEventArgs>(addHandler, removeHandler, onNext => (_, args) => onNext(args));
+
+    /// <summary>
+    /// Waits for every source to emit at a given index, then emits the combined values as a list, positionally.
+    /// Same-type-only for now (unlike rxjs's heterogeneously-typed tuple overloads) — C# has no variadic
+    /// generics; add typed 2/3/4-arg overloads later if a real use case needs mixed element types.
+    /// </summary>
+    public static Observable<IReadOnlyList<T>> Zip<T>(params Observable<T>[] sources)
+    {
+        if (sources.Length == 0)
+        {
+            return Empty<IReadOnlyList<T>>();
+        }
+
+        return new Observable<IReadOnlyList<T>>(subscriber =>
+        {
+            var buffers = new List<Queue<T>>();
+            for (var i = 0; i < sources.Length; i++)
+            {
+                buffers.Add(new Queue<T>());
+            }
+
+            var sourceCompleted = new bool[sources.Length];
+            var subscriptions = new List<IDisposable>();
+
+            void TryEmit()
+            {
+                while (buffers.TrueForAll(buffer => buffer.Count > 0))
+                {
+                    var combined = new List<T>(sources.Length);
+                    foreach (var buffer in buffers)
+                    {
+                        combined.Add(buffer.Dequeue());
+                    }
+
+                    subscriber.OnNext(combined);
+                }
+
+                for (var i = 0; i < sources.Length; i++)
+                {
+                    if (sourceCompleted[i] && buffers[i].Count == 0)
+                    {
+                        subscriber.OnCompleted();
+                        return;
+                    }
+                }
+            }
+
+            for (var i = 0; i < sources.Length; i++)
+            {
+                var index = i;
+                subscriptions.Add(sources[index].Subscribe(
+                    onNext: value =>
+                    {
+                        buffers[index].Enqueue(value);
+                        TryEmit();
+                    },
+                    onError: subscriber.OnError,
+                    onComplete: () =>
+                    {
+                        sourceCompleted[index] = true;
+                        TryEmit();
+                    }));
+            }
+
+            return new Subscription(() =>
+            {
+                foreach (var subscription in subscriptions)
+                {
+                    subscription.Dispose();
+                }
+            });
+        });
+    }
+
+    /// <summary>Waits for every source to complete, then emits a list of each source's last value — but only if every source emitted at least one value. Same-type-only, see <see cref="Zip{T}"/>.</summary>
+    public static Observable<IReadOnlyList<T>> ForkJoin<T>(params Observable<T>[] sources)
+    {
+        if (sources.Length == 0)
+        {
+            return Empty<IReadOnlyList<T>>();
+        }
+
+        return new Observable<IReadOnlyList<T>>(subscriber =>
+        {
+            var values = new T[sources.Length];
+            var hasValue = new bool[sources.Length];
+            var remaining = sources.Length;
+            var subscriptions = new List<IDisposable>();
+
+            for (var i = 0; i < sources.Length; i++)
+            {
+                var index = i;
+                subscriptions.Add(sources[index].Subscribe(
+                    onNext: value =>
+                    {
+                        values[index] = value;
+                        hasValue[index] = true;
+                    },
+                    onError: subscriber.OnError,
+                    onComplete: () =>
+                    {
+                        if (!hasValue[index])
+                        {
+                            subscriber.OnCompleted();
+                            return;
+                        }
+
+                        remaining--;
+                        if (remaining == 0)
+                        {
+                            subscriber.OnNext(values);
+                            subscriber.OnCompleted();
+                        }
+                    }));
+            }
+
+            return new Subscription(() =>
+            {
+                foreach (var subscription in subscriptions)
+                {
+                    subscription.Dispose();
+                }
+            });
+        });
+    }
+
+    /// <summary>Emits a list of every source's latest value whenever any source emits, once all sources have emitted at least once. Same-type-only, see <see cref="Zip{T}"/>.</summary>
+    public static Observable<IReadOnlyList<T>> CombineLatest<T>(params Observable<T>[] sources)
+    {
+        if (sources.Length == 0)
+        {
+            return Empty<IReadOnlyList<T>>();
+        }
+
+        return new Observable<IReadOnlyList<T>>(subscriber =>
+        {
+            var values = new T[sources.Length];
+            var hasValue = new bool[sources.Length];
+            var completed = new bool[sources.Length];
+            var hasAllValues = false;
+            var subscriptions = new List<IDisposable>();
+
+            for (var i = 0; i < sources.Length; i++)
+            {
+                var index = i;
+                subscriptions.Add(sources[index].Subscribe(
+                    onNext: value =>
+                    {
+                        values[index] = value;
+                        hasValue[index] = true;
+                        if (!hasAllValues && Array.TrueForAll(hasValue, has => has))
+                        {
+                            hasAllValues = true;
+                        }
+
+                        if (hasAllValues)
+                        {
+                            subscriber.OnNext((T[])values.Clone());
+                        }
+                    },
+                    onError: subscriber.OnError,
+                    onComplete: () =>
+                    {
+                        completed[index] = true;
+                        if (!hasValue[index] || Array.TrueForAll(completed, c => c))
+                        {
+                            subscriber.OnCompleted();
+                        }
+                    }));
+            }
+
+            return new Subscription(() =>
+            {
+                foreach (var subscription in subscriptions)
+                {
+                    subscription.Dispose();
+                }
+            });
+        });
+    }
+
+    public static T Identity<T>(T value) => value;
+
+    public static void Noop()
+    {
+    }
 }
 
