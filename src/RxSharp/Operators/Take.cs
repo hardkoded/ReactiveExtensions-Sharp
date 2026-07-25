@@ -27,8 +27,16 @@ public static class TakeOperator
         return source.Operate<T, T>((src, subscriber) =>
         {
             var seen = 0;
-            var sourceSubscription = new SingleAssignmentDisposable();
-            sourceSubscription.Disposable = src.Subscribe(
+
+            // Built directly (rather than via the Subscribe(onNext:...) convenience overload, whose returned
+            // disposable can only be captured *after* Subscribe returns) so this closure holds a reference to
+            // the inner subscriber it can dispose immediately, even from a nested/synchronous callback -- e.g.
+            // a hand-rolled source that emits many values in a loop, checking its own subscriber's IsDisposed
+            // flag each iteration. A SingleAssignmentDisposable wrapping src.Subscribe(...)'s return value
+            // doesn't help here: that value isn't assigned until Subscribe returns, which for a synchronous
+            // source is only after the whole loop has already run to completion.
+            Subscriber<T> innerSubscriber = null!;
+            innerSubscriber = Subscriber.Create<T>(
                 onNext: value =>
                 {
                     if (++seen <= count)
@@ -37,14 +45,14 @@ public static class TakeOperator
                         if (seen >= count)
                         {
                             subscriber.OnCompleted();
-                            sourceSubscription.Dispose();
+                            innerSubscriber.Dispose();
                         }
                     }
                 },
                 onError: subscriber.OnError,
                 onComplete: subscriber.OnCompleted);
 
-            return sourceSubscription;
+            return src.Subscribe(innerSubscriber);
         });
     }
 }

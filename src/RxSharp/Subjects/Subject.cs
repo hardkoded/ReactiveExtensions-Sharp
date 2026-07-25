@@ -35,6 +35,34 @@ public class Subject<T> : IObservable<T>, IObserver<T>, IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the subject has already terminated via <see cref="OnError"/>. Exposed to
+    /// subclasses (see <see cref="RxSharp.Subjects.BehaviorSubject{T}"/>, <see cref="RxSharp.Subjects.AsyncSubject{T}"/>)
+    /// so they can consult the error state for their own bookkeeping.
+    /// </summary>
+    protected bool HasError
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _hasError;
+            }
+        }
+    }
+
+    /// <summary>Gets the error the subject terminated with, or <see langword="null"/> if it hasn't errored (or was disposed after erroring).</summary>
+    protected Exception? ThrownError
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _thrownError;
+            }
+        }
+    }
+
     /// <summary>Pushes a value to every observer currently subscribed. A no-op once the subject has stopped or been disposed.</summary>
     /// <param name="value">The value to push.</param>
     public virtual void OnNext(T value)
