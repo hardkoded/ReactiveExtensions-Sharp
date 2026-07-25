@@ -118,4 +118,23 @@ public class SubjectTests
 
         Assert.That(values, Is.EqualTo(new[] { 1 }));
     }
+
+    // Regression test: AsObservable() used to wrap Subscribe via the Action<Subscriber<T>> constructor overload,
+    // which discards whatever the delegate returns -- silently dropping the RemovalDisposable that Subscribe
+    // returns. That meant disposing a subscription obtained through AsObservable() never actually removed the
+    // observer from the subject's internal list (see CLAUDE.md's Learnings for the full story).
+    [Test]
+    public void AsObservable_DisposingTheSubscriptionShouldRemoveTheObserverFromTheSubject()
+    {
+        var subject = new Subject<int>();
+        var subscription = subject.AsObservable().Subscribe(_ => { });
+
+        subscription.Dispose();
+
+        var observers = (System.Collections.IList)typeof(Subject<int>)
+            .GetField("_observers", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(subject)!;
+
+        Assert.That(observers, Is.Empty);
+    }
 }

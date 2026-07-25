@@ -187,6 +187,10 @@ public class Subject<T> : IObservable<T>, IObserver<T>, IDisposable
 
     /// <summary>Wraps this subject so it is exposed to callers purely as an <see cref="Observable{T}"/>, hiding its <see cref="IObserver{T}"/> (push) side.</summary>
     /// <returns>An <see cref="Observable{T}"/> that subscribes through this subject.</returns>
+    // `subscriber => Subscribe(subscriber)` is compatible with both Observable<T> constructor overloads (the
+    // Action<Subscriber<T>> one would silently discard the RemovalDisposable Subscribe returns), but C# prefers
+    // the Func-returning overload in this exact tie — confirmed by a clean-rebuild test, not just assumed; see
+    // CLAUDE.md's Learnings for why this is worth calling out explicitly.
     public Observable<T> AsObservable() => new Observable<T>(subscriber => Subscribe(subscriber));
 
     /// <summary>Disposes the subject: marks it disposed and drops all current observers without notifying them.</summary>
