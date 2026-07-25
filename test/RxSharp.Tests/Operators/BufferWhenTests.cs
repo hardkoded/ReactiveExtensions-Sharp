@@ -1,3 +1,4 @@
+using System.Reflection;
 using RxSharp.Operators;
 using RxSharp.Subjects;
 
@@ -94,5 +95,59 @@ public class BufferWhenTests
         Observable.ThrowError<int>(() => error).BufferWhen(() => Observable.Never<int>()).Subscribe(onError: err => received = err);
 
         Assert.That(received, Is.SameAs(error));
+    }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): the source subscription must be
+    // registered as a child of the downstream subscriber (via SubscribeChild) *before* being subscribed. Unlike
+    // WindowWhen, BufferWhen does not emit eagerly on the very first cycle (a buffer only appears once it closes),
+    // but a closing selector that fires synchronously (Observable.Of(0)) causes a recursive second cycle whose
+    // *first* buffer (the empty one from cycle 1) is emitted before the source is ever subscribed -- so Take(1)
+    // on the outer stream still disposes before src.SubscribeChild(...) ever runs, and the self-checking source
+    // must never get to execute a single loop iteration.
+    [Test]
+    public void ShouldCascadeDisposalToTheSourceBeforeItIsEverSubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.BufferWhen(() => Observable.Of(0)).Take(1).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.Empty);
+    }
+
+    // Regression test for the "matching Remove on natural end" half of the same fix: each cycle's closing-notifier
+    // subscriber is registered as a child of the downstream subscriber before being subscribed, but it must also
+    // be *removed* again once superseded, or the downstream subscriber's finalizer list grows by one entry per
+    // buffer, forever, for a long-running stream. There's no public API to observe the finalizer list, so this
+    // reaches into the private field via reflection and compares the count after few vs. many cycles -- if stale
+    // subscriptions were never removed, running more cycles would show a correspondingly larger count.
+    [Test]
+    public void ShouldNotAccumulateStaleClosingNotifierSubscriptionsAcrossManyBufferCycles()
+    {
+        int RunCycles(int cycleCount)
+        {
+            var trigger = new Subject<int>();
+            var subscription = Observable.Never<int>()
+                .BufferWhen(() => trigger.AsObservable())
+                .Subscribe(_ => { });
+
+            for (var i = 0; i < cycleCount; i++)
+            {
+                trigger.OnNext(i);
+            }
+
+            var finalizersField = typeof(Subscription).GetField("_finalizers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var finalizers = (System.Collections.IList?)finalizersField.GetValue(subscription);
+            return finalizers?.Count ?? 0;
+        }
+
+        Assert.That(RunCycles(25), Is.EqualTo(RunCycles(3)), "the finalizer list size should not grow with the number of completed buffer cycles");
     }
 }

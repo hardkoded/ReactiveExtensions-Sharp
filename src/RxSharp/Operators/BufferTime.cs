@@ -84,7 +84,8 @@ public static class BufferTimeOperator
 
             StartBuffer();
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     foreach (var record in records.ToArray())

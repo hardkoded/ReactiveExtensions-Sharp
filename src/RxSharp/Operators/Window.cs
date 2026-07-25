@@ -30,7 +30,8 @@ public static class WindowOperator
                 subscriber.OnError(error);
             }
 
-            var sourceSubscription = src.Subscribe(
+            src.SubscribeChild(
+                subscriber,
                 onNext: value => window.OnNext(value),
                 onError: HandleError,
                 onComplete: () =>
@@ -38,9 +39,9 @@ public static class WindowOperator
                     window.OnCompleted();
                     subscriber.OnCompleted();
                 });
-            subscriber.Add(sourceSubscription);
 
-            var boundarySubscription = boundary.Subscribe(
+            boundary.SubscribeChild(
+                subscriber,
                 onNext: _ =>
                 {
                     window.OnCompleted();
@@ -48,7 +49,6 @@ public static class WindowOperator
                     subscriber.OnNext(window.AsObservable());
                 },
                 onError: HandleError);
-            subscriber.Add(boundarySubscription);
 
             return null;
         });

@@ -21,7 +21,8 @@ public static class BufferOperator
         {
             var currentBuffer = new List<T>();
 
-            var sourceSubscription = src.Subscribe(
+            src.SubscribeChild(
+                subscriber,
                 onNext: value => currentBuffer.Add(value),
                 onError: subscriber.OnError,
                 onComplete: () =>
@@ -29,9 +30,9 @@ public static class BufferOperator
                     subscriber.OnNext(currentBuffer);
                     subscriber.OnCompleted();
                 });
-            subscriber.Add(sourceSubscription);
 
-            var notifierSubscription = closingNotifier.Subscribe(
+            closingNotifier.SubscribeChild(
+                subscriber,
                 onNext: _ =>
                 {
                     var closed = currentBuffer;
@@ -39,7 +40,6 @@ public static class BufferOperator
                     subscriber.OnNext(closed);
                 },
                 onError: subscriber.OnError);
-            subscriber.Add(notifierSubscription);
 
             return null;
         });

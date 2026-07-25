@@ -104,6 +104,29 @@ public class BufferTimeTests
         Assert.That(received, Is.SameAs(error));
     }
 
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): the source subscription must be
+    // registered as a child of the downstream subscriber (via SubscribeChild) *before* being subscribed, so a
+    // downstream disposal cascades into a still-running, fully-synchronous source. Unlike WindowTime, BufferTime
+    // does not emit eagerly (a buffer only appears once it closes), so maxBufferSize:1 closes (and emits) a
+    // buffer on every single value, and Take(3) disposes right after the third value is processed.
+    [Test]
+    public void ShouldStopListeningToASynchronousSourceWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.BufferTime(TimeSpan.FromSeconds(30), maxBufferSize: 1).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
     [Test]
     public void ShouldSupportOverlappingBuffersViaACreationInterval()
     {

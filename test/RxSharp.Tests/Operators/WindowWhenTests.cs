@@ -1,3 +1,4 @@
+using System.Reflection;
 using RxSharp.Operators;
 using RxSharp.Subjects;
 
@@ -150,5 +151,67 @@ public class WindowWhenTests
         Assert.That(windows, Has.Count.EqualTo(1));
         Assert.That(windows[0], Is.Empty);
         Assert.That(completed, Is.True);
+    }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): the source subscription must be
+    // registered as a child of the downstream subscriber (via SubscribeChild) *before* being subscribed. WindowWhen
+    // opens its first window eagerly, before the source is ever subscribed and before the closing selector is
+    // ever invoked, so Take(1) on the outer stream disposes right there -- the self-checking source must never
+    // get to execute a single loop iteration.
+    [Test]
+    public void ShouldCascadeDisposalToTheSourceBeforeItIsEverSubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.WindowWhen(() => Observable.Never<int>()).Take(1).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.Empty);
+    }
+
+    // Regression test for the "matching Remove on natural end" half of the same fix: each cycle's closing-notifier
+    // subscriber is registered as a child of the downstream subscriber before being subscribed (so an early
+    // downstream disposal can cascade into it), but it must also be *removed* again once superseded by the next
+    // cycle's -- otherwise the downstream subscriber's finalizer list grows by one entry per window, forever, for
+    // a long-running stream. There's no public API to observe the finalizer list, so this reaches into the
+    // private field via reflection -- the only way to actually verify the growth is bounded rather than just
+    // trusting that "Dispose() was called" (which was already true before this fix; only the list *entry* is new).
+    private static int CountFinalizers(IDisposable subscription)
+    {
+        var finalizersField = typeof(Subscription).GetField("_finalizers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var finalizers = (System.Collections.IList?)finalizersField.GetValue(subscription);
+        return finalizers?.Count ?? 0;
+    }
+
+    [Test]
+    public void ShouldNotAccumulateStaleClosingNotifierSubscriptionsAcrossManyWindowCycles()
+    {
+        int RunCycles(int cycleCount)
+        {
+            var trigger = new Subject<int>();
+            var subscription = Observable.Never<int>()
+                .WindowWhen(() => trigger.AsObservable())
+                .Subscribe(window => window.Subscribe(_ => { }));
+
+            for (var i = 0; i < cycleCount; i++)
+            {
+                trigger.OnNext(i);
+            }
+
+            return CountFinalizers(subscription);
+        }
+
+        // If stale closing-notifier subscriptions were never removed, the finalizer list would grow by one entry
+        // per cycle, so running many more cycles would show a correspondingly larger count. Since each cycle's
+        // subscription is disposed *and* removed once superseded, the count instead stays flat regardless of how
+        // many windows have already opened and closed.
+        Assert.That(RunCycles(25), Is.EqualTo(RunCycles(3)), "the finalizer list size should not grow with the number of completed window cycles");
     }
 }

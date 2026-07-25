@@ -97,6 +97,30 @@ public class WindowTimeTests
         Assert.That(outerError, Is.SameAs(error));
     }
 
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): the source subscription must be
+    // registered as a child of the downstream subscriber (via SubscribeChild) *before* being subscribed, so a
+    // downstream disposal cascades into a still-running, fully-synchronous source. WindowTime opens its first
+    // window eagerly (emission #1), and maxWindowSize:1 closes (and reopens) a window on every single value, so
+    // Take(3) disposes right after the *second* source value is processed -- no real time needs to elapse, since
+    // the assertion happens purely through synchronous execution before the 30s window timer is ever relevant.
+    [Test]
+    public void ShouldStopListeningToASynchronousSourceWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.WindowTime(TimeSpan.FromSeconds(30), maxWindowSize: 1).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1 }));
+    }
+
     [Test]
     public void ShouldSupportOverlappingWindowsViaACreationInterval()
     {

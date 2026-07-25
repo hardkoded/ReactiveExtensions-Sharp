@@ -83,7 +83,8 @@ public static class WindowTimeOperator
 
             StartWindow();
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     foreach (var record in records.ToArray())
