@@ -31,7 +31,8 @@ public static class ScanOperator
             var acc = seed;
             var index = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     TAcc result;
@@ -93,7 +94,8 @@ public static class ScanOperator
             T acc = default!;
             var index = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     if (!hasSeed)

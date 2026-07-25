@@ -21,7 +21,8 @@ public static class PairwiseOperator
             var hasPrevious = false;
             T previous = default!;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     // The previous value is captured and the state updated to the new value *before* emitting

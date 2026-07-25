@@ -32,7 +32,8 @@ public static class TakeLastOperator
         {
             var buffer = new Queue<T>();
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     buffer.Enqueue(value);

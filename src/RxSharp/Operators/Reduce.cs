@@ -33,7 +33,8 @@ public static class ReduceOperator
             var acc = seed;
             var index = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     try
@@ -94,7 +95,8 @@ public static class ReduceOperator
             T acc = default!;
             var index = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     if (!hasValue)

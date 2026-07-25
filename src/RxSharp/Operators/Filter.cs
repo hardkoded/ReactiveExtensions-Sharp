@@ -27,7 +27,8 @@ public static class FilterOperator
         => source.Operate<T, T>((src, subscriber) =>
         {
             var index = 0;
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     bool matches;

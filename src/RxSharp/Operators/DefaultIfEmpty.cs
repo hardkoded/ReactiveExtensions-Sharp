@@ -18,7 +18,8 @@ public static class DefaultIfEmptyOperator
         => source.Operate<T, T>((src, subscriber) =>
         {
             var hasValue = false;
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     hasValue = true;

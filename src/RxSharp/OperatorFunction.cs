@@ -39,4 +39,38 @@ public static class OperatorHelper
     /// <returns>The result of applying <paramref name="op"/> to <paramref name="source"/>.</returns>
     public static Observable<TResult> Pipe<TSource, TResult>(this Observable<TSource> source, OperatorFunction<TSource, TResult> op)
         => op(source);
+
+    /// <summary>
+    /// Subscribes to <paramref name="source"/> with a fresh inner <see cref="Subscriber{TSource}"/>, registered as a
+    /// child of <paramref name="downstream"/> <em>before</em> the subscribe call runs. This is what lets a downstream
+    /// disposal (an early-completing operator further down the chain, or an external unsubscribe) cascade up and stop
+    /// <paramref name="source"/> immediately — including mid-loop for a fully-synchronous, self-checking source —
+    /// instead of only after the whole synchronous call stack has already unwound. See CLAUDE.md's Learnings for the
+    /// full story of the bug this fixes.
+    /// </summary>
+    /// <remarks>
+    /// Only use this for an operator with exactly ONE inner subscription for its whole lifetime. An operator that
+    /// creates a new inner subscription per value or per cycle (`MergeMap`, `SwitchMap`, `Debounce`, `Window*`, ...)
+    /// needs to also call <see cref="Subscription.Remove"/> once each inner subscription naturally ends, or the
+    /// downstream subscriber's finalizer list grows unboundedly — this helper does not do that for you.
+    /// </remarks>
+    /// <typeparam name="TSource">The element type of the source observable.</typeparam>
+    /// <typeparam name="TResult">The element type of the downstream subscriber (usually unrelated to the callback signatures, just needed to type <paramref name="downstream"/>).</typeparam>
+    /// <param name="source">The source observable to subscribe to.</param>
+    /// <param name="downstream">The downstream subscriber the new inner subscriber is registered as a child of.</param>
+    /// <param name="onNext">Called for each value from <paramref name="source"/>.</param>
+    /// <param name="onError">Called if <paramref name="source"/> errors.</param>
+    /// <param name="onComplete">Called when <paramref name="source"/> completes.</param>
+    /// <returns>The inner subscriber, already subscribed and already registered as a child of <paramref name="downstream"/>.</returns>
+    public static IDisposable SubscribeChild<TSource, TResult>(
+        this Observable<TSource> source,
+        Subscriber<TResult> downstream,
+        Action<TSource>? onNext = null,
+        Action<Exception>? onError = null,
+        Action? onComplete = null)
+    {
+        var innerSubscriber = Subscriber.Create(onNext, onError, onComplete);
+        downstream.Add(innerSubscriber);
+        return source.Subscribe(innerSubscriber);
+    }
 }

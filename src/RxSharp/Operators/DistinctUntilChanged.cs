@@ -41,7 +41,8 @@ public static class DistinctUntilChangedOperator
             var first = true;
             var previousKey = default(TKey);
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     TKey currentKey;

@@ -23,7 +23,8 @@ public static class TapOperator
     /// <param name="onComplete">An optional side effect invoked before completion is forwarded downstream.</param>
     /// <returns>An observable that mirrors <paramref name="source"/> while running the given side effects.</returns>
     public static Observable<T> Tap<T>(this Observable<T> source, Action<T>? onNext = null, Action<Exception>? onError = null, Action? onComplete = null)
-        => source.Operate<T, T>((src, subscriber) => src.Subscribe(
+        => source.Operate<T, T>((src, subscriber) => src.SubscribeChild(
+            subscriber,
             onNext: value =>
             {
                 if (onNext is not null)

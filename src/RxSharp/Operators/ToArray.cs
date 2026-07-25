@@ -18,7 +18,8 @@ public static class ToArrayOperator
         {
             var buffer = new List<T>();
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: buffer.Add,
                 onError: subscriber.OnError,
                 onComplete: () =>
