@@ -83,4 +83,40 @@ public class DebounceTimeTests
         Assert.That(results, Is.Empty);
         Assert.That(received, Is.SameAs(error));
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): DebounceTime's outer source
+    // subscription must register its inner subscriber as a child of its own downstream subscriber, so a
+    // disposal further down the chain (here, Take completing early) cascades all the way back and tears down
+    // the source subscription. Unlike Debounce/Audit/Throttle (which can be driven fully synchronously via
+    // Observable.Of), DebounceTime always defers through a real scheduler, so this observes the cascade
+    // indirectly: a tracking wrapper around the source registers a finalizer as a child of the subscriber
+    // DebounceTime subscribes with, and asserts that finalizer runs once Take(1) completes the chain.
+    [Test]
+    public void ShouldCascadeDisposalThroughDebounceTimeToTheSourceSubscription()
+    {
+        var source = new Subject<int>();
+        using var disposalSignal = new ManualResetEventSlim();
+        var sourceUnsubscribed = false;
+
+        // The signal is set from *inside* the finalizer itself (not from the value/onNext callback), so waiting
+        // on it can't race with the cascade — unlike waiting on a signal set from the emitted value, which races
+        // with Take's own subsequent Dispose() call happening on the same background thread just afterwards.
+        Observable<int> trackedSource = new(subscriber =>
+        {
+            var innerSubscription = source.AsObservable().Subscribe(subscriber);
+            subscriber.Add(new Subscription(() =>
+            {
+                sourceUnsubscribed = true;
+                disposalSignal.Set();
+            }));
+            return innerSubscription;
+        });
+
+        trackedSource.DebounceTime(TimeSpan.FromMilliseconds(5)).Take(1).Subscribe(_ => { });
+
+        source.OnNext(1);
+
+        Assert.That(disposalSignal.Wait(TimeSpan.FromSeconds(2)), Is.True, "Take completing should cascade back and unsubscribe from the source");
+        Assert.That(sourceUnsubscribed, Is.True);
+    }
 }

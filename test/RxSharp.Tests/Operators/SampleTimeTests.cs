@@ -123,4 +123,38 @@ public class SampleTimeTests
         Assert.That(results, Is.Empty, "sampleTime does not flush a pending value on completion, unlike debounce/audit");
         Assert.That(completed, Is.True);
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): SampleTime's outer source
+    // subscription must register its inner subscriber as a child of its own downstream subscriber, so a
+    // disposal further down the chain (here, Take completing early) cascades all the way back and tears down
+    // the source subscription. SampleTime is driven by a self-rescheduling real timer rather than a duration
+    // selector, so this observes the cascade indirectly: a tracking wrapper around the source registers a
+    // finalizer as a child of the subscriber SampleTime subscribes with, and asserts that finalizer runs once
+    // Take(1) completes the chain. The signal is set from *inside* the finalizer itself so waiting on it can't
+    // race with the cascade.
+    [Test]
+    public void ShouldCascadeDisposalThroughSampleTimeToTheSourceSubscription()
+    {
+        var source = new Subject<int>();
+        using var disposalSignal = new ManualResetEventSlim();
+        var sourceUnsubscribed = false;
+
+        Observable<int> trackedSource = new(subscriber =>
+        {
+            var innerSubscription = source.AsObservable().Subscribe(subscriber);
+            subscriber.Add(new Subscription(() =>
+            {
+                sourceUnsubscribed = true;
+                disposalSignal.Set();
+            }));
+            return innerSubscription;
+        });
+
+        trackedSource.SampleTime(TimeSpan.FromMilliseconds(20)).Take(1).Subscribe(_ => { });
+
+        source.OnNext(1);
+
+        Assert.That(disposalSignal.Wait(TimeSpan.FromSeconds(2)), Is.True, "Take completing should cascade back and unsubscribe from the source");
+        Assert.That(sourceUnsubscribed, Is.True);
+    }
 }

@@ -120,4 +120,28 @@ public class ThrottleTests
     // call, which this port's `SingleAssignmentDisposable`-based teardown does not support yet (the disposal
     // only takes effect once the nested synchronous `Subscribe` call unwinds, i.e. after it already ran to
     // completion) — a pre-existing gap in `Take` itself, reproducible with `Take` alone, not specific to `Throttle`.
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): Throttle's outer source
+    // subscription must register its inner subscriber as a child of its own downstream subscriber, so a
+    // disposal further down the chain (here, Take completing early) cascades all the way back to a fully
+    // synchronous, self-checking source mid-loop. With the default leading:true/trailing:false config and a
+    // synchronous duration selector (Observable.Of), each window opens and closes immediately, so every value
+    // is forwarded and the whole chain is synchronous end-to-end.
+    [Test]
+    public void ShouldCascadeDisposalThroughThrottleToASynchronousSource()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.Throttle(_ => Observable.Of(0)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }
