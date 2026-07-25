@@ -40,7 +40,8 @@ public static class WithLatestFromOperator
                 },
                 onError: subscriber.OnError));
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     if (!hasLatest)
@@ -118,7 +119,8 @@ public static class WithLatestFromOperator
                     onError: subscriber.OnError));
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     if (!Array.TrueForAll(hasLatest, has => has))

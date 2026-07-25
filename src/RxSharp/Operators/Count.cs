@@ -40,7 +40,8 @@ public static class CountOperator
             var count = 0;
             var index = 0;
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     bool matches;

@@ -12,5 +12,5 @@ public static class IgnoreElementsOperator
     /// <param name="source">The source observable whose values should be ignored.</param>
     /// <returns>An observable that never emits a value, but completes or errors exactly when <paramref name="source"/> does.</returns>
     public static Observable<T> IgnoreElements<T>(this Observable<T> source)
-        => source.Operate<T, T>((src, subscriber) => src.Subscribe(onError: subscriber.OnError, onComplete: subscriber.OnCompleted));
+        => source.Operate<T, T>((src, subscriber) => src.SubscribeChild(subscriber, onError: subscriber.OnError, onComplete: subscriber.OnCompleted));
 }

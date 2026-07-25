@@ -37,7 +37,8 @@ public static class MapOperator
         => source.Operate<TSource, TResult>((src, subscriber) =>
         {
             var index = 0;
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     TResult result;

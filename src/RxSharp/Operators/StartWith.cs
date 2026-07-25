@@ -31,6 +31,6 @@ public static class StartWithOperator
 
             return subscriber.IsDisposed
                 ? null
-                : src.Subscribe(onNext: subscriber.OnNext, onError: subscriber.OnError, onComplete: subscriber.OnCompleted);
+                : src.SubscribeChild(subscriber, onNext: subscriber.OnNext, onError: subscriber.OnError, onComplete: subscriber.OnCompleted);
         });
 }

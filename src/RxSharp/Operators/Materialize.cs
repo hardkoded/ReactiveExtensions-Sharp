@@ -18,7 +18,8 @@ public static class MaterializeOperator
     /// </returns>
     public static Observable<Notification<T>> Materialize<T>(this Observable<T> source)
         => source.Operate<T, Notification<T>>((src, subscriber) =>
-            src.Subscribe(
+            src.SubscribeChild(
+                subscriber,
                 onNext: value => subscriber.OnNext(Notification.CreateNext(value)),
                 onError: error =>
                 {
@@ -44,7 +45,8 @@ public static class MaterializeOperator
     /// <returns>An observable of the unwrapped values, terminating as directed by each notification.</returns>
     public static Observable<T> Dematerialize<T>(this Observable<Notification<T>> source)
         => source.Operate<Notification<T>, T>((src, subscriber) =>
-            src.Subscribe(
+            src.SubscribeChild(
+                subscriber,
                 onNext: notification => notification.Accept(subscriber),
                 onError: subscriber.OnError,
                 onComplete: subscriber.OnCompleted));
