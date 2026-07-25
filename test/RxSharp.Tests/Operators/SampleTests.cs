@@ -121,4 +121,39 @@ public class SampleTests
         source.OnCompleted();
         Assert.That(completed, Is.True);
     }
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): Sample's outer subscriptions (to
+    // both the source and the notifier) must register their inner subscribers as children of Sample's own
+    // downstream subscriber, so a disposal further down the chain (here, Take completing early) cascades all the
+    // way back to a fully synchronous, self-checking notifier mid-loop.
+    //
+    // Sample subscribes to the source before the notifier, so the self-checking loop has to live on the
+    // notifier side, not the source side: a self-checking *source* would run to completion in one synchronous
+    // burst before the notifier (which is what actually triggers forwarding) is even subscribed, so no downstream
+    // disposal could ever reach it mid-loop. `StartWith(0)` seeds an initial value synchronously as Sample
+    // subscribes to the source, and the final subscriber reentrantly pushes a fresh source value on every
+    // forwarded sample, so each notifier tick has something new to sample.
+    [Test]
+    public void ShouldCascadeDisposalThroughSampleToASynchronousNotifier()
+    {
+        var sideEffects = new List<int>();
+        var source = new Subject<int>();
+        var next = 1;
+
+        Observable<Unit> notifier = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(Unit.Default);
+            }
+        });
+
+        source.AsObservable().StartWith(0)
+            .Sample(notifier)
+            .Take(3)
+            .Subscribe(_ => source.OnNext(next++));
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

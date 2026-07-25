@@ -19,7 +19,11 @@ public static class SampleOperator
             var hasValue = false;
             T lastValue = default!;
 
-            var sourceSubscription = src.Subscribe(
+            // Both the source and the notifier are subscribed exactly once for the whole lifetime of this
+            // operator (unlike Debounce/Audit/Throttle, there is no per-value/per-cycle resubscription here), so
+            // each is eligible for the simple SubscribeChild helper directly.
+            src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     lastValue = value;
@@ -27,9 +31,9 @@ public static class SampleOperator
                 },
                 onError: subscriber.OnError,
                 onComplete: subscriber.OnCompleted);
-            subscriber.Add(sourceSubscription);
 
-            var notifierSubscription = notifier.Subscribe(
+            notifier.SubscribeChild(
+                subscriber,
                 onNext: _ =>
                 {
                     if (!hasValue)
@@ -43,7 +47,6 @@ public static class SampleOperator
                     subscriber.OnNext(value);
                 },
                 onError: subscriber.OnError);
-            subscriber.Add(notifierSubscription);
 
             return null;
         });
@@ -62,10 +65,33 @@ public static class SampleOperator
         => source.Operate<T, T>((src, subscriber) =>
         {
             var activeScheduler = scheduler ?? TaskPoolScheduler.Instance;
-            var timerSubscription = new SingleAssignmentDisposable();
-            subscriber.Add(timerSubscription);
+            IDisposable? timerSubscription = null;
             var hasValue = false;
             T lastValue = default!;
+
+            // Cancels and forgets the currently-pending tick, if any. Removing it from `subscriber`'s finalizer
+            // list (not just disposing it) keeps that list bounded across a long-running stream instead of
+            // growing by one stale entry per tick. `IScheduler.Schedule` on `TaskPoolScheduler` always defers via
+            // `Task.Delay`, so there is no reentrancy hazard here the way there is for a duration observable that
+            // can complete synchronously (see `Debounce`/`Audit`/`Throttle`).
+            void ClearTimer()
+            {
+                if (timerSubscription is null)
+                {
+                    return;
+                }
+
+                subscriber.Remove(timerSubscription);
+                timerSubscription.Dispose();
+                timerSubscription = null;
+            }
+
+            void ScheduleNextTick()
+            {
+                var scheduled = activeScheduler.Schedule(Tick, period);
+                timerSubscription = scheduled;
+                subscriber.Add(scheduled);
+            }
 
             void Tick()
             {
@@ -73,6 +99,8 @@ public static class SampleOperator
                 {
                     return;
                 }
+
+                ClearTimer();
 
                 if (hasValue)
                 {
@@ -82,12 +110,13 @@ public static class SampleOperator
                     subscriber.OnNext(value);
                 }
 
-                timerSubscription.Disposable = activeScheduler.Schedule(Tick, period);
+                ScheduleNextTick();
             }
 
-            timerSubscription.Disposable = activeScheduler.Schedule(Tick, period);
+            ScheduleNextTick();
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     lastValue = value;

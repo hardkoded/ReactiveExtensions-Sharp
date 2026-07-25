@@ -150,4 +150,27 @@ public class AuditTests
     // call, which this port's `SingleAssignmentDisposable`-based teardown does not support yet (the disposal
     // only takes effect once the nested synchronous `Subscribe` call unwinds, i.e. after it already ran to
     // completion) — a pre-existing gap in `Take` itself, reproducible with `Take` alone, not specific to `Audit`.
+
+    // Regression test for the disposal-cascade fix (see CLAUDE.md Learnings): Audit's outer source subscription
+    // must register its inner subscriber as a child of its own downstream subscriber, so a disposal further down
+    // the chain (here, Take completing early) cascades all the way back to a fully synchronous, self-checking
+    // source mid-loop. A synchronous duration selector (Observable.Of) opens and closes each window immediately,
+    // so the whole chain is synchronous end-to-end.
+    [Test]
+    public void ShouldCascadeDisposalThroughAuditToASynchronousSource()
+    {
+        var sideEffects = new List<int>();
+        Observable<int> source = new(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        source.Audit(_ => Observable.Of(0)).Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
 }

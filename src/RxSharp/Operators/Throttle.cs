@@ -25,8 +25,7 @@ public static class ThrottleOperator
         bool trailing = false)
         => source.Operate<T, T>((src, subscriber) =>
         {
-            var throttled = new SingleAssignmentDisposable();
-            subscriber.Add(throttled);
+            Subscriber<TDuration>? throttleSubscriber = null;
             var hasValue = false;
             var isThrottled = false;
             var isSourceComplete = false;
@@ -45,6 +44,36 @@ public static class ThrottleOperator
                 subscriber.OnNext(value);
             }
 
+            // Disposes and forgets the current window's duration subscription, if any. Removing it from
+            // `subscriber`'s finalizer list (not just disposing it) keeps that list bounded across a long-running
+            // stream instead of growing by one stale entry per window.
+            void ClearThrottleSubscription()
+            {
+                if (throttleSubscriber is null)
+                {
+                    return;
+                }
+
+                subscriber.Remove(throttleSubscriber);
+                throttleSubscriber.Dispose();
+                throttleSubscriber = null;
+            }
+
+            void ClearThrottle()
+            {
+                isThrottled = false;
+                ClearThrottleSubscription();
+                if (trailing)
+                {
+                    Send();
+                }
+
+                if (isSourceComplete)
+                {
+                    subscriber.OnCompleted();
+                }
+            }
+
             void StartThrottle(T value)
             {
                 Observable<TDuration> duration;
@@ -60,29 +89,24 @@ public static class ThrottleOperator
 
                 isThrottled = true;
 
-                void ClearThrottle()
-                {
-                    isThrottled = false;
-                    throttled.Disposable?.Dispose();
-                    throttled.Disposable = null;
-                    if (trailing)
-                    {
-                        Send();
-                    }
-
-                    if (isSourceComplete)
-                    {
-                        subscriber.OnCompleted();
-                    }
-                }
-
-                throttled.Disposable = duration.Subscribe(
+                // Built directly via Subscriber.Create and assigned/added *before* Subscribe runs (mirroring
+                // WindowWhen/BufferWhen's closing-notifier fix — see CLAUDE.md) rather than a
+                // SingleAssignmentDisposable reassigned only after Subscribe returns: if `duration` emits and then
+                // completes synchronously (e.g. Observable.Of(x)), the reentrant ClearThrottle() call from the
+                // first notification disposes this very subscriber, so the guard already built into
+                // Subscriber{T}.OnNext/OnCompleted (checked via IsDisposed) silently no-ops the second,
+                // immediately-following notification instead of double-closing the window.
+                var innerSubscriber = Subscriber.Create<TDuration>(
                     onNext: _ => ClearThrottle(),
                     onError: subscriber.OnError,
                     onComplete: ClearThrottle);
+                throttleSubscriber = innerSubscriber;
+                subscriber.Add(innerSubscriber);
+                duration.Subscribe(innerSubscriber);
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     hasValue = true;

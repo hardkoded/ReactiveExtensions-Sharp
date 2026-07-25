@@ -30,15 +30,30 @@ public static class DebounceTimeOperator
         => source.Operate<T, T>((src, subscriber) =>
         {
             var activeScheduler = scheduler ?? TaskPoolScheduler.Instance;
-            var activeTask = new SingleAssignmentDisposable();
-            subscriber.Add(activeTask);
+            IDisposable? activeTask = null;
             var hasValue = false;
             T lastValue = default!;
 
+            // Cancels and forgets the currently-pending scheduled callback, if any. Removing it from `subscriber`'s
+            // finalizer list (not just disposing it) keeps that list bounded across a long-running stream instead
+            // of growing by one stale entry per source value. `IScheduler.Schedule` on `TaskPoolScheduler` always
+            // defers via `Task.Delay`, so there is no reentrancy hazard here the way there is for a duration
+            // observable that can complete synchronously (see `Debounce`/`Audit`/`Throttle`).
+            void ClearTask()
+            {
+                if (activeTask is null)
+                {
+                    return;
+                }
+
+                subscriber.Remove(activeTask);
+                activeTask.Dispose();
+                activeTask = null;
+            }
+
             void Emit()
             {
-                activeTask.Disposable?.Dispose();
-                activeTask.Disposable = null;
+                ClearTask();
                 if (!hasValue)
                 {
                     return;
@@ -50,13 +65,16 @@ public static class DebounceTimeOperator
                 subscriber.OnNext(value);
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     lastValue = value;
                     hasValue = true;
-                    activeTask.Disposable?.Dispose();
-                    activeTask.Disposable = activeScheduler.Schedule(Emit, dueTime);
+                    ClearTask();
+                    var scheduled = activeScheduler.Schedule(Emit, dueTime);
+                    activeTask = scheduled;
+                    subscriber.Add(scheduled);
                 },
                 onError: subscriber.OnError,
                 onComplete: () =>

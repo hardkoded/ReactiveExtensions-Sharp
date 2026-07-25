@@ -18,16 +18,29 @@ public static class AuditOperator
     public static Observable<T> Audit<T, TDuration>(this Observable<T> source, Func<T, Observable<TDuration>> durationSelector)
         => source.Operate<T, T>((src, subscriber) =>
         {
-            var durationSubscription = new SingleAssignmentDisposable();
-            subscriber.Add(durationSubscription);
+            Subscriber<TDuration>? durationSubscriber = null;
             var hasValue = false;
             var isAuditing = false;
             T lastValue = default!;
 
+            // Disposes and forgets the current window's duration subscription, if any. Removing it from
+            // `subscriber`'s finalizer list (not just disposing it) keeps that list bounded across a long-running
+            // stream instead of growing by one stale entry per window.
+            void ClearDuration()
+            {
+                if (durationSubscriber is null)
+                {
+                    return;
+                }
+
+                subscriber.Remove(durationSubscriber);
+                durationSubscriber.Dispose();
+                durationSubscriber = null;
+            }
+
             void CloseWindow()
             {
-                durationSubscription.Disposable?.Dispose();
-                durationSubscription.Disposable = null;
+                ClearDuration();
                 isAuditing = false;
                 if (!hasValue)
                 {
@@ -40,7 +53,8 @@ public static class AuditOperator
                 subscriber.OnNext(value);
             }
 
-            return src.Subscribe(
+            return src.SubscribeChild(
+                subscriber,
                 onNext: value =>
                 {
                     lastValue = value;
@@ -63,10 +77,21 @@ public static class AuditOperator
                     }
 
                     isAuditing = true;
-                    durationSubscription.Disposable = duration.Subscribe(
+
+                    // Built directly via Subscriber.Create and assigned/added *before* Subscribe runs (mirroring
+                    // WindowWhen/BufferWhen's closing-notifier fix — see CLAUDE.md) rather than a
+                    // SingleAssignmentDisposable reassigned only after Subscribe returns: if `duration` emits and
+                    // then completes synchronously (e.g. Observable.Of(x)), the reentrant CloseWindow() call from
+                    // the first notification disposes this very subscriber, so the guard already built into
+                    // Subscriber{T}.OnNext/OnCompleted (checked via IsDisposed) silently no-ops the second,
+                    // immediately-following notification instead of double-closing the window.
+                    var innerSubscriber = Subscriber.Create<TDuration>(
                         onNext: _ => CloseWindow(),
                         onError: subscriber.OnError,
                         onComplete: CloseWindow);
+                    durationSubscriber = innerSubscriber;
+                    subscriber.Add(innerSubscriber);
+                    duration.Subscribe(innerSubscriber);
                 },
                 onError: subscriber.OnError,
                 onComplete: () =>
