@@ -72,4 +72,24 @@ public class DisposalCascadeTests
 
         Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
     }
+
+    // SubscribeChild registers its inner subscriber as a child of the downstream subscriber itself (see its doc
+    // comment in OperatorFunction.cs), so it deliberately returns null instead of the inner subscriber -- otherwise
+    // a caller's `return src.SubscribeChild(...)` would flow that same object back up through Observable<T>.Subscribe,
+    // which adds whatever a subscribe callback returns as a second finalizer, registering it twice. Harmless (disposing
+    // a Subscription twice is a no-op) but a permanent duplicate entry per operator instance. This inspects the
+    // finalizer list via reflection to confirm there's exactly one entry, not two.
+    [Test]
+    public void ShouldNotRegisterTheInnerSubscriptionTwice()
+    {
+        // Never() never completes, so the subscription stays alive and its finalizer list stays inspectable
+        // (a synchronously-completing source like Of(...) would already have disposed and cleared it by now).
+        var subscription = Observable.Never<int>().Map(x => x).Subscribe(_ => { });
+
+        var finalizers = (System.Collections.IList?)typeof(Subscription)
+            .GetField("_finalizers", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(subscription);
+
+        Assert.That(finalizers, Has.Count.EqualTo(1));
+    }
 }
