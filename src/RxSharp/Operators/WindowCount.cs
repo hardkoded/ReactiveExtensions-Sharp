@@ -2,6 +2,7 @@ using RxSharp.Subjects;
 
 namespace RxSharp.Operators;
 
+/// <summary>The <c>windowCount</c> operator.</summary>
 public static class WindowCountOperator
 {
     /// <summary>
@@ -14,6 +15,11 @@ public static class WindowCountOperator
     /// <paramref name="windowSize"/> values — the two counters run independently, which is what produces
     /// overlapping windows when <paramref name="startWindowEvery"/> is less than <paramref name="windowSize"/>.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="windowSize">The number of values each window collects before closing.</param>
+    /// <param name="startWindowEvery">How often (in source values) a new window opens; defaults to <paramref name="windowSize"/> for non-overlapping windows.</param>
+    /// <returns>An observable of windows, each itself an observable of up to <paramref name="windowSize"/> values.</returns>
     public static Observable<Observable<T>> WindowCount<T>(this Observable<T> source, int windowSize, int? startWindowEvery = null)
     {
         var every = startWindowEvery is > 0 ? startWindowEvery.Value : windowSize;

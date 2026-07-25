@@ -1,5 +1,6 @@
 namespace RxSharp.Operators;
 
+/// <summary>The <c>sample</c>/<c>sampleTime</c> operators.</summary>
 public static class SampleOperator
 {
     /// <summary>
@@ -7,6 +8,11 @@ public static class SampleOperator
     /// source value since the last sample produces no emission. The notifier completing does not complete (or
     /// otherwise affect) the result — sampling simply stops happening once it does. Mirrors rxjs's <c>sample</c>.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <typeparam name="TNotifier">The (unused) element type of the notifier.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="notifier">Emits to trigger each sample.</param>
+    /// <returns>An observable that emits the most recent source value on every notifier tick.</returns>
     public static Observable<T> Sample<T, TNotifier>(this Observable<T> source, Observable<TNotifier> notifier)
         => source.Operate<T, T>((src, subscriber) =>
         {
@@ -47,6 +53,11 @@ public static class SampleOperator
     /// observable. Implemented as a self-rescheduling timer (there is no <c>Observable.Interval</c> creation
     /// function yet) rather than layering on <see cref="Sample{T, TNotifier}"/>.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="period">The fixed sampling period.</param>
+    /// <param name="scheduler">The scheduler to time the period with; defaults to <see cref="TaskPoolScheduler"/>.</param>
+    /// <returns>An observable that emits the most recent source value on every tick of the period.</returns>
     public static Observable<T> SampleTime<T>(this Observable<T> source, TimeSpan period, IScheduler? scheduler = null)
         => source.Operate<T, T>((src, subscriber) =>
         {

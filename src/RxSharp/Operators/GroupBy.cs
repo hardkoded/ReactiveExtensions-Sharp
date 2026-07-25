@@ -2,12 +2,27 @@ using RxSharp.Subjects;
 
 namespace RxSharp.Operators;
 
+/// <summary>The <c>groupBy</c> operator. See the main overload below for full behavior.</summary>
 public static class GroupByOperator
 {
+    /// <summary>Groups source values by <paramref name="keySelector"/>, one <see cref="IGroupedObservable{TKey, T}"/> per distinct key.</summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <typeparam name="TKey">The type of the shared key.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="keySelector">Selects the grouping key for each value.</param>
+    /// <returns>An observable of groups, one per distinct key.</returns>
     public static Observable<IGroupedObservable<TKey, T>> GroupBy<T, TKey>(this Observable<T> source, Func<T, TKey> keySelector)
         where TKey : notnull
         => source.GroupBy(keySelector, value => value, (Func<IGroupedObservable<TKey, T>, Observable<Unit>>?)null);
 
+    /// <summary>Groups source values by <paramref name="keySelector"/>, projecting each value with <paramref name="elementSelector"/> before it's added to its group.</summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <typeparam name="TKey">The type of the shared key.</typeparam>
+    /// <typeparam name="TElement">The type of the projected group elements.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="keySelector">Selects the grouping key for each value.</param>
+    /// <param name="elementSelector">Projects each source value into the value emitted by its group.</param>
+    /// <returns>An observable of groups, one per distinct key.</returns>
     public static Observable<IGroupedObservable<TKey, TElement>> GroupBy<T, TKey, TElement>(
         this Observable<T> source,
         Func<T, TKey> keySelector,
@@ -26,6 +41,15 @@ public static class GroupByOperator
     /// Deliberately does not implement rxjs's ref-counted "close the source once the outer and every inner group
     /// have been unsubscribed" behavior — disposing the outer subscription always tears down the source directly.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <typeparam name="TKey">The type of the shared key.</typeparam>
+    /// <typeparam name="TElement">The type of the projected group elements.</typeparam>
+    /// <typeparam name="TDuration">The (unused) element type of the duration observable.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="keySelector">Selects the grouping key for each value.</param>
+    /// <param name="elementSelector">Projects each source value into the value emitted by its group.</param>
+    /// <param name="durationSelector">Given a newly created group, returns an observable whose first emission or completion closes that group.</param>
+    /// <returns>An observable of groups, one per distinct key (and per duration-selector-bounded lifetime, if given).</returns>
     public static Observable<IGroupedObservable<TKey, TElement>> GroupBy<T, TKey, TElement, TDuration>(
         this Observable<T> source,
         Func<T, TKey> keySelector,

@@ -1,5 +1,6 @@
 namespace RxSharp.Operators;
 
+/// <summary>The <c>throttle</c>/<c>throttleTime</c> operators.</summary>
 public static class ThrottleOperator
 {
     /// <summary>
@@ -10,6 +11,13 @@ public static class ThrottleOperator
     /// <paramref name="trailing"/>: <see langword="true"/> additionally emits the most recent value seen during the
     /// window once it closes. Mirrors rxjs's <c>throttle</c>.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <typeparam name="TDuration">The (unused) element type of the duration observable.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="durationSelector">Given the value that opened the current window, returns the observable whose first emission or completion closes it.</param>
+    /// <param name="leading">Whether to emit the value that opens each window immediately.</param>
+    /// <param name="trailing">Whether to emit the most recent value seen during a window once it closes.</param>
+    /// <returns>An observable that throttles emissions per the leading/trailing configuration.</returns>
     public static Observable<T> Throttle<T, TDuration>(
         this Observable<T> source,
         Func<T, Observable<TDuration>> durationSelector,
@@ -107,6 +115,13 @@ public static class ThrottleOperator
     /// safe to reuse (unlike <c>Delay</c>, see its own remarks) because only one duration subscription is ever
     /// active at a time, so there is no concurrent-timer ordering hazard.
     /// </summary>
+    /// <typeparam name="T">The element type of the source.</typeparam>
+    /// <param name="source">The source observable.</param>
+    /// <param name="duration">The fixed window length.</param>
+    /// <param name="scheduler">The scheduler to time the window with; defaults to <see cref="TaskPoolScheduler"/>.</param>
+    /// <param name="leading">Whether to emit the value that opens each window immediately.</param>
+    /// <param name="trailing">Whether to emit the most recent value seen during a window once it closes.</param>
+    /// <returns>An observable that throttles emissions per the leading/trailing configuration.</returns>
     public static Observable<T> ThrottleTime<T>(
         this Observable<T> source,
         TimeSpan duration,
