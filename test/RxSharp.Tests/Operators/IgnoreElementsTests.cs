@@ -28,4 +28,26 @@ public class IgnoreElementsTests
         Assert.That(nextCalls, Is.EqualTo(0));
         Assert.That(received, Is.SameAs(error));
     }
+
+    [Test]
+    public void ShouldHandleAnEmptySource()
+    {
+        var nextCalls = 0;
+        var completed = false;
+        Observable.Empty<int>().IgnoreElements().Subscribe(_ => nextCalls++, onComplete: () => completed = true);
+
+        Assert.That(nextCalls, Is.EqualTo(0));
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void ShouldHandleANeverSource()
+    {
+        var nextCalls = 0;
+        var completed = false;
+        Observable.Never<int>().IgnoreElements().Subscribe(_ => nextCalls++, onComplete: () => completed = true);
+
+        Assert.That(nextCalls, Is.EqualTo(0));
+        Assert.That(completed, Is.False);
+    }
 }
