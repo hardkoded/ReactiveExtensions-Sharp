@@ -101,6 +101,87 @@ public class ObservableCreationTests
         Assert.That(secondSubscribed, Is.False);
     }
 
+    // Ported (non-marble subset) from rxjs 7.8.2 spec/observables/onErrorResumeNext-spec.ts.
+    [Test]
+    public void OnErrorResumeNext_ShouldMoveToTheNextSourceOnErrorOrOnComplete()
+    {
+        var results = new List<int>();
+        var completed = false;
+
+        Observable.OnErrorResumeNext(
+                Observable.Concat(Observable.Of(1, 2), Observable.ThrowError<int>(() => new InvalidOperationException("s1"))),
+                Observable.Concat(Observable.Of(3, 4), Observable.ThrowError<int>(() => new InvalidOperationException("s2"))),
+                Observable.Of(5, 6),
+                Observable.Of(7))
+            .Subscribe(results.Add, onComplete: () => completed = true);
+
+        Assert.That(results, Is.EqualTo(new[] { 1, 2, 3, 4, 5, 6, 7 }));
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void OnErrorResumeNext_ShouldCompleteImmediatelyWhenGivenNoSources()
+    {
+        var completed = false;
+        Observable.OnErrorResumeNext<int>().Subscribe(onComplete: () => completed = true);
+
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void OnErrorResumeNext_ShouldCompleteRatherThanErrorWhenTheOnlySourceErrors()
+    {
+        var completed = false;
+        var errored = false;
+
+        Observable.OnErrorResumeNext(Observable.ThrowError<int>(() => new InvalidOperationException("boom")))
+            .Subscribe(onError: _ => errored = true, onComplete: () => completed = true);
+
+        Assert.That(errored, Is.False);
+        Assert.That(completed, Is.True);
+    }
+
+    [Test]
+    public void OnErrorResumeNext_ShouldRunEachSourcesOwnTeardownBeforeSubscribingToTheNext()
+    {
+        var results = new List<object>();
+
+        Observable<int> WithTeardown(int value, string label) => new Observable<int>(subscriber =>
+        {
+            subscriber.Add(() => results.Add(label));
+            subscriber.OnNext(value);
+            subscriber.OnCompleted();
+        });
+
+        Observable.OnErrorResumeNext(
+                WithTeardown(1, "finalize 1"),
+                WithTeardown(2, "finalize 2"),
+                WithTeardown(3, "finalize 3"),
+                WithTeardown(4, "finalize 4"))
+            .Subscribe(v => results.Add(v), onComplete: () => results.Add("complete"));
+
+        Assert.That(
+            results,
+            Is.EqualTo(new object[] { 1, "finalize 1", 2, "finalize 2", 3, "finalize 3", 4, "finalize 4", "complete" }));
+    }
+
+    [Test]
+    public void OnErrorResumeNext_ShouldNotAdvanceToTheNextSourceWhenExternallyUnsubscribed()
+    {
+        var secondSubscribed = false;
+        var subscription = Observable.OnErrorResumeNext(
+            Observable.Never<int>(),
+            new Observable<int>(subscriber =>
+            {
+                secondSubscribed = true;
+                subscriber.OnCompleted();
+            })).Subscribe();
+
+        subscription.Dispose();
+
+        Assert.That(secondSubscribed, Is.False, "an external unsubscribe must stop the chain, not advance it");
+    }
+
     [Test]
     public void Merge_ShouldEmitFromAllSourcesConcurrentlyAndCompleteWhenAllHaveCompleted()
     {
@@ -448,6 +529,108 @@ public class ObservableCreationTests
 
         Assert.That(firstResults, Is.EqualTo(new[] { "a" }));
         Assert.That(secondResults, Is.EqualTo(new[] { "b" }));
+    }
+
+    // Ported (non-marble subset) from rxjs 7.8.2 spec/observables/using-spec.ts.
+    [Test]
+    public void Using_ShouldDisposeOfTheResourceWhenTheSubscriptionIsDisposed()
+    {
+        var disposed = false;
+
+        Observable.Using(() => new Subscription(() => disposed = true), (Subscription _) => Observable.Range(0, 3))
+            .Take(2)
+            .Subscribe();
+
+        Assert.That(disposed, Is.True);
+    }
+
+    [Test]
+    public void Using_ShouldRaiseErrorWhenTheResourceFactoryThrows()
+    {
+        var expectedError = new InvalidOperationException("resource factory boom");
+        var observableFactoryCalled = false;
+        Exception? received = null;
+
+        Observable.Using<int, Subscription>(
+                () => throw expectedError,
+                _ =>
+                {
+                    observableFactoryCalled = true;
+                    return Observable.Of(1);
+                })
+            .Subscribe(onError: err => received = err);
+
+        Assert.That(received, Is.SameAs(expectedError));
+        Assert.That(observableFactoryCalled, Is.False);
+    }
+
+    [Test]
+    public void Using_ShouldRaiseErrorAndStillDisposeTheResourceWhenTheObservableFactoryThrows()
+    {
+        var error = new InvalidOperationException("observable factory boom");
+        var disposed = false;
+        Exception? received = null;
+
+        Observable.Using<int, Subscription>(
+                () => new Subscription(() => disposed = true),
+                _ => throw error)
+            .Subscribe(onError: err => received = err);
+
+        Assert.That(received, Is.SameAs(error));
+        Assert.That(disposed, Is.True);
+    }
+
+    [Test]
+    public void Using_ShouldCreateAFreshResourceAndSourceForEachSubscription()
+    {
+        var resourceFactoryCalls = 0;
+        var observableFactoryCalls = 0;
+
+        var source = Observable.Using(
+            () =>
+            {
+                resourceFactoryCalls++;
+                return new Subscription(Observable.Noop);
+            },
+            (Subscription _) =>
+            {
+                observableFactoryCalls++;
+                return Observable.Of(1);
+            });
+
+        source.Subscribe();
+        source.Subscribe();
+
+        Assert.That(resourceFactoryCalls, Is.EqualTo(2));
+        Assert.That(observableFactoryCalls, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Using_ShouldDisposeTheResourceOnExternalUnsubscribeBeforeTheSourceCompletes()
+    {
+        var disposed = false;
+        var subscription = Observable.Using(() => new Subscription(() => disposed = true), (Subscription _) => Observable.Never<int>())
+            .Subscribe();
+
+        Assert.That(disposed, Is.False);
+        subscription.Dispose();
+
+        Assert.That(disposed, Is.True);
+    }
+
+    [Test]
+    public void Using_ShouldDisposeTheResourceAfterTheSourcesOwnTeardownRuns()
+    {
+        var order = new List<string>();
+
+        var subscription = Observable.Using(
+                () => new Subscription(() => order.Add("resource")),
+                (Subscription _) => new Observable<int>(subscriber => subscriber.Add(() => order.Add("source"))))
+            .Subscribe();
+
+        subscription.Dispose();
+
+        Assert.That(order, Is.EqualTo(new[] { "source", "resource" }));
     }
 
     [Test]

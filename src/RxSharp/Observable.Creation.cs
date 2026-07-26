@@ -69,6 +69,51 @@ public static class Observable
     /// <returns>An observable that defers creation of its source until subscribe time.</returns>
     public static Observable<T> Defer<T>(Func<Observable<T>> factory) => new Observable<T>(subscriber => factory().Subscribe(subscriber));
 
+    /// <summary>
+    /// Creates an <see cref="Observable{TSource}"/> that creates a resource via <paramref name="resourceFactory"/>
+    /// at subscribe time, uses <paramref name="observableFactory"/> to build the actual source from that
+    /// resource, and disposes the resource once the subscription ends — whichever of complete, error, or
+    /// unsubscribe comes first. A fresh resource (and a fresh source) is created independently for every
+    /// subscription; neither is shared across subscribers. Mirrors rxjs's <c>using</c>.
+    /// </summary>
+    /// <remarks>
+    /// Deviates from rxjs's <c>using</c> in one respect: rxjs's resource factory may return nothing at all (no
+    /// resource), and the "resource" only needs a structural <c>unsubscribe()</c> method. C# has no equivalent
+    /// to an optional structural type here, so this overload requires <typeparamref name="TResource"/> to
+    /// implement <see cref="IDisposable"/> directly — pass a resource whose <see cref="IDisposable.Dispose"/> is
+    /// a no-op if no real cleanup is needed. If <paramref name="observableFactory"/> throws, the resource —
+    /// already created by <paramref name="resourceFactory"/> by that point — is still disposed before the error
+    /// is forwarded; if <paramref name="resourceFactory"/> itself throws, there is no resource to dispose and
+    /// the error is simply forwarded (via the same synchronous-exception-to-<c>OnError</c> path every
+    /// <see cref="Observable{T}"/> subscribe delegate already gets).
+    /// </remarks>
+    /// <typeparam name="TSource">The type of the emitted values.</typeparam>
+    /// <typeparam name="TResource">The resource type, disposed when the subscription ends.</typeparam>
+    /// <param name="resourceFactory">Invoked once per subscription to create the resource.</param>
+    /// <param name="observableFactory">Invoked once per subscription, with the resource just created, to build the source observable.</param>
+    /// <returns>An observable that mirrors the source built by <paramref name="observableFactory"/>, disposing the resource when the subscription ends.</returns>
+    public static Observable<TSource> Using<TSource, TResource>(Func<TResource> resourceFactory, Func<TResource, Observable<TSource>> observableFactory)
+        where TResource : IDisposable
+        => new Observable<TSource>(subscriber =>
+        {
+            var resource = resourceFactory();
+
+            Observable<TSource> source;
+            try
+            {
+                source = observableFactory(resource);
+            }
+            catch (Exception ex)
+            {
+                resource.Dispose();
+                subscriber.OnError(ex);
+                return null;
+            }
+
+            source.Subscribe(subscriber);
+            return new Subscription(() => resource.Dispose());
+        });
+
     /// <summary>Creates an <see cref="Observable{T}"/> that completes immediately, without ever emitting a value.</summary>
     /// <typeparam name="T">The (unused) element type, needed only so the result can be composed with other <see cref="Observable{T}"/> sources of the same type.</typeparam>
     /// <returns>An observable that completes immediately.</returns>
@@ -326,6 +371,69 @@ public static class Observable
             var subscription = new SingleAssignmentDisposable();
             subscriber.Add(subscription);
             subscription.Disposable = next.Subscribe(onNext: subscriber.OnNext, onError: subscriber.OnError, onComplete: SubscribeNext);
+        }
+
+        SubscribeNext();
+    });
+
+    /// <summary>
+    /// Creates an <see cref="Observable{T}"/> that subscribes to each of <paramref name="sources"/> in order,
+    /// moving to the next source as soon as the current one either completes <em>or</em> errors — unlike
+    /// <see cref="Concat{T}"/>, which stops (and forwards the error) the first time a source errors. The
+    /// resulting observable completes once every source has been exhausted and never itself errors, no matter
+    /// how many of the sources errored along the way.
+    /// </summary>
+    /// <remarks>
+    /// This deliberately does not use the same "resubscribe as an unconditional teardown action" trick rxjs's
+    /// own implementation uses internally (see rxjs 7.8.2's <c>observable/onErrorResumeNext.ts</c>): there, the
+    /// per-source child subscriber resubscribes to the next source as one of its own registered teardown
+    /// actions, which — because an external unsubscribe of the outer observable cascades down and disposes that
+    /// same child subscriber — would also (incorrectly) advance to the next source on a plain external
+    /// unsubscribe, not just on the current source's own completion or error. Here, moving to the next source is
+    /// triggered directly from inside the current source's <c>onError</c>/<c>onComplete</c> callbacks only
+    /// (matching the pattern <see cref="RxSharp.Operators.RetryOperator.Retry{T}"/> uses for its own per-attempt
+    /// resubscription), so an external unsubscribe correctly stops the whole chain instead of skipping ahead.
+    /// </remarks>
+    /// <typeparam name="T">The type of the emitted values.</typeparam>
+    /// <param name="sources">The sources to subscribe to sequentially. An empty array completes immediately, matching <see cref="Empty{T}"/>.</param>
+    /// <returns>An observable that emits every source's values in sequence, moving past errors instead of forwarding them, completing once every source has ended.</returns>
+    public static Observable<T> OnErrorResumeNext<T>(params Observable<T>[] sources) => new Observable<T>(subscriber =>
+    {
+        var index = 0;
+
+        void SubscribeNext()
+        {
+            if (subscriber.IsDisposed)
+            {
+                return;
+            }
+
+            if (index >= sources.Length)
+            {
+                subscriber.OnCompleted();
+                return;
+            }
+
+            var next = sources[index++];
+
+            Subscriber<T> innerSubscriber = null!;
+            innerSubscriber = Subscriber.Create<T>(
+                onNext: subscriber.OnNext,
+                onError: _ =>
+                {
+                    subscriber.Remove(innerSubscriber);
+                    innerSubscriber.Dispose();
+                    SubscribeNext();
+                },
+                onComplete: () =>
+                {
+                    subscriber.Remove(innerSubscriber);
+                    innerSubscriber.Dispose();
+                    SubscribeNext();
+                });
+
+            subscriber.Add(innerSubscriber);
+            next.Subscribe(innerSubscriber);
         }
 
         SubscribeNext();
