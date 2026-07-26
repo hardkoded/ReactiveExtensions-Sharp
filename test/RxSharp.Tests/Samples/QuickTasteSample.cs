@@ -19,7 +19,7 @@ public static class QuickTasteSample
         // begin-snippet: quick-taste-csharp
         var clicks = Observable.FromEvent<EventArgs>(h => button.Click += h, h => button.Click -= h);
 
-        Observable.Timer(TimeSpan.FromSeconds(1))
+        Observable.Interval(TimeSpan.FromSeconds(1))
             .Map(x => x * x)
             .Filter(x => x % 2 == 0)
             .TakeUntil(clicks)

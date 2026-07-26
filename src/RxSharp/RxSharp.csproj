@@ -15,6 +15,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageVersion>0.1.0</PackageVersion>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
@@ -48,6 +49,10 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeStyle" Version="4.11.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
     <AdditionalFiles Include="stylecop.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
