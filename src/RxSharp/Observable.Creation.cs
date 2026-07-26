@@ -363,6 +363,14 @@ public static class Observable
 
         void SubscribeNext()
         {
+            // Guards against unbounded recursion once downstream has already gone away, and is also what lets a
+            // fully-synchronous, self-checking source stop mid-loop instead of only once the whole recursive
+            // chain unwinds -- see CLAUDE.md's Learnings for the general pattern.
+            if (subscriber.IsDisposed)
+            {
+                return;
+            }
+
             if (index >= sources.Length)
             {
                 subscriber.OnCompleted();
@@ -370,9 +378,24 @@ public static class Observable
             }
 
             var next = sources[index++];
-            var subscription = new SingleAssignmentDisposable();
-            subscriber.Add(subscription);
-            subscription.Disposable = next.Subscribe(onNext: subscriber.OnNext, onError: subscriber.OnError, onComplete: SubscribeNext);
+
+            // Built directly and registered as a child of `subscriber` *before* subscribing (rather than via the
+            // Subscribe(onNext:...) convenience overload assigned into a SingleAssignmentDisposable afterwards,
+            // which is too late for a fully-synchronous source to observe its own disposal mid-emission), then
+            // Remove()'d once this cycle naturally ends -- same shape as Repeat/RepeatWhen's per-cycle subscriber.
+            Subscriber<T> cycleSubscriber = null!;
+            cycleSubscriber = Subscriber.Create<T>(
+                onNext: subscriber.OnNext,
+                onError: subscriber.OnError,
+                onComplete: () =>
+                {
+                    subscriber.Remove(cycleSubscriber);
+                    cycleSubscriber.Dispose();
+                    SubscribeNext();
+                });
+
+            subscriber.Add(cycleSubscriber);
+            next.Subscribe(cycleSubscriber);
         }
 
         SubscribeNext();
