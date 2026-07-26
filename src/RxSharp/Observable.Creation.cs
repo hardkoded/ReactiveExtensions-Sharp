@@ -442,6 +442,15 @@ public static class Observable
     });
 
     /// <summary>Creates an <see cref="Observable{T}"/> that subscribes to all <paramref name="sources"/> concurrently and emits every value from every source as it arrives, completing once all sources have completed.</summary>
+    /// <remarks>
+    /// Each source is subscribed via <see cref="OperatorHelper.SubscribeChild{TSource, TResult}"/> -- exactly one,
+    /// stable subscription per source for the whole lifetime of the operator (never resubscribed), which is what
+    /// that helper is for. This is also what lets a downstream disposal (e.g. an early-completing <c>Take</c>)
+    /// cascade up and stop a fully-synchronous, self-checking source mid-loop, instead of only once the whole
+    /// synchronous call stack has unwound -- found and fixed alongside the equivalent bug in <see cref="Concat{T}"/>
+    /// (see CLAUDE.md's Learnings), which predated M6's disposal-cascade fix since both are creation functions,
+    /// not operator extension methods.
+    /// </remarks>
     /// <typeparam name="T">The type of the emitted values.</typeparam>
     /// <param name="sources">The sources to merge together.</param>
     /// <returns>An observable that emits the interleaved values of every source.</returns>
@@ -454,7 +463,6 @@ public static class Observable
         }
 
         var remaining = sources.Length;
-        var subscriptions = new List<IDisposable>();
 
         foreach (var source in sources)
         {
@@ -463,7 +471,8 @@ public static class Observable
                 break;
             }
 
-            subscriptions.Add(source.Subscribe(
+            source.SubscribeChild(
+                subscriber,
                 onNext: subscriber.OnNext,
                 onError: subscriber.OnError,
                 onComplete: () =>
@@ -473,16 +482,10 @@ public static class Observable
                     {
                         subscriber.OnCompleted();
                     }
-                }));
+                });
         }
 
-        return new Subscription(() =>
-        {
-            foreach (var subscription in subscriptions)
-            {
-                subscription.Dispose();
-            }
-        });
+        return null;
     });
 
     /// <summary>
@@ -648,6 +651,16 @@ public static class Observable
     }
 
     /// <summary>Emits a list of every source's latest value whenever any source emits, once all sources have emitted at least once. Same-type-only, see <see cref="Zip{T}"/>.</summary>
+    /// <remarks>
+    /// Completes only once every source has completed, matching rxjs's own <c>combineLatest</c> exactly (verified
+    /// against the 7.8.2 tag's <c>combineLatestInit</c>, which just decrements an <c>active</c> counter on each
+    /// source's completion and completes the result once it reaches zero — no special case for a source that
+    /// completes without ever emitting). This means if a source completes without a value while another source is
+    /// still active, the result does not complete early: it keeps waiting on the still-active source, even though
+    /// it can now never emit (since it can never have "all sources' latest value"). This deliberately differs from
+    /// <see cref="ForkJoin{T}"/>, which DOES complete eagerly the moment any source completes without a value —
+    /// don't unify the two, they have genuinely different documented/tested behavior in rxjs itself.
+    /// </remarks>
     /// <typeparam name="T">The element type shared by every source.</typeparam>
     /// <param name="sources">The sources to combine.</param>
     /// <returns>An observable that emits a snapshot list of the latest values, updated on every subsequent emission once every source has emitted at least once.</returns>
@@ -688,7 +701,7 @@ public static class Observable
                     onComplete: () =>
                     {
                         completed[index] = true;
-                        if (!hasValue[index] || Array.TrueForAll(completed, c => c))
+                        if (Array.TrueForAll(completed, c => c))
                         {
                             subscriber.OnCompleted();
                         }
