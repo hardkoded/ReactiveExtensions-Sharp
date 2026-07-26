@@ -5,11 +5,11 @@ A .NET port of [RxJS](https://rxjs.dev/) — same operators, same semantics, sam
 ## Quick Start
 
 ```
-dotnet add package RxSharp
+dotnet add package ReactiveExtensionsSharp
 ```
 
 ```csharp
-var clicks = Observable.FromEvent(button, nameof(button.Click));
+var clicks = Observable.FromEvent<EventArgs>(h => button.Click += h, h => button.Click -= h);
 
 Observable.Interval(TimeSpan.FromSeconds(1))
     .Map(x => x * x)
