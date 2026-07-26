@@ -86,6 +86,15 @@ public static class ConcatMapOperator
                     {
                         isInnerActive = false;
                         subscriber.Remove(innerSubscriber!);
+
+                        // Subscriber<T>.OnCompleted() invokes this callback *before* its own `finally { Unsubscribe(); }`
+                        // runs — so without forcing it here, the just-completed inner's teardown (e.g. a `Finally`-style
+                        // disposable) would only run *after* SubscribeNext() below has already subscribed to (and
+                        // possibly synchronously run) the next queued inner. Disposing eagerly here (idempotent, so the
+                        // later automatic Unsubscribe() is a no-op) makes finalization of one inner always complete
+                        // before the next one is even created, matching rxjs's own "should finalize before moving to
+                        // the next observable" behavior.
+                        innerSubscriber!.Unsubscribe();
                         SubscribeNext();
                     });
                 subscriber.Add(innerSubscriber);

@@ -12,7 +12,11 @@ public static class TakeUntilOperator
     /// <remarks>
     /// Only <paramref name="notifier"/>'s first <c>next</c> notification matters: if it errors or completes
     /// without ever emitting a value, that is ignored and has no effect on the output — it does not complete
-    /// or error the output, matching rxjs's own <c>takeUntil</c> behavior.
+    /// or error the output, matching rxjs's own <c>takeUntil</c> behavior (which passes an explicit no-op error
+    /// handler to the notifier subscription for exactly this reason — see <c>takeUntil.ts</c>'s own
+    /// <c>createOperatorSubscriber(subscriber, () => subscriber.complete(), noop)</c>). The notifier subscription
+    /// here does the same: an explicit no-op <c>onError</c>, not an omitted one — omitting it entirely would leave
+    /// a notifier error unhandled (forwarded to <see cref="RxConfig.OnUnhandledError"/>) rather than genuinely ignored.
     /// </remarks>
     /// <typeparam name="T">The type of values emitted by <paramref name="source"/> and by the output.</typeparam>
     /// <typeparam name="TNotifier">
@@ -25,7 +29,7 @@ public static class TakeUntilOperator
     public static Observable<T> TakeUntil<T, TNotifier>(this Observable<T> source, Observable<TNotifier> notifier)
         => source.Operate<T, T>((src, subscriber) =>
         {
-            var notifierSubscription = notifier.Subscribe(onNext: _ => subscriber.OnCompleted());
+            var notifierSubscription = notifier.Subscribe(onNext: _ => subscriber.OnCompleted(), onError: _ => { });
             subscriber.Add(notifierSubscription);
 
             return subscriber.IsDisposed

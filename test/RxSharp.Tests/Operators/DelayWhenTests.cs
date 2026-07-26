@@ -52,4 +52,35 @@ public class DelayWhenTests
 
         Assert.That(received, Is.SameAs(error));
     }
+
+    // rxjs's `delayWhen` also accepts an optional second `subscriptionDelay` observable that delays subscribing
+    // to the source itself, separate from the per-value `delayDurationSelector`. This codebase's `DelayWhen` only
+    // has the two delayDurationSelector overloads (indexed and non-indexed) — no subscriptionDelay overload
+    // exists to port that upstream case against. Noted as a feature gap rather than silently skipped.
+    [Test]
+    public void ShouldPropagateErrorsWhenTheSelectorFunctionThrows()
+    {
+        var error = new InvalidOperationException("boom");
+        Exception? received = null;
+
+        Observable.Of(1, 2).DelayWhen<int, Unit>((_, _) => throw error).Subscribe(onError: err => received = err);
+
+        Assert.That(received, Is.SameAs(error));
+    }
+
+    [Test]
+    public void ShouldCallTheSelectorWithIndicesStartingAtZero()
+    {
+        var indices = new List<int>();
+        var completed = false;
+
+        Observable.Of("a", "b", "c").DelayWhen((value, index) =>
+        {
+            indices.Add(index);
+            return Observable.Of(Unit.Default);
+        }).Subscribe(onComplete: () => completed = true);
+
+        Assert.That(indices, Is.EqualTo(new[] { 0, 1, 2 }));
+        Assert.That(completed, Is.True);
+    }
 }
