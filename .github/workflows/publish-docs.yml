@@ -26,6 +26,13 @@ jobs:
             8.0.x
             10.0.x
 
+      # `docfx metadata`'s own internal design-time build emits a non-fatal NETSDK1045 ("does not support
+      # targeting .NET 10.0") annotation on this step, regardless of which SDKs are installed above or which
+      # TargetFramework docfx.json's metadata `properties` requests (tried both net10.0 and net8.0 -- no change).
+      # It's a known docfx 2.74.1 + net10.0-multi-targeted-csproj quirk, not something this workflow's own
+      # config controls. Harmless: the job still succeeds and the generated API docs are complete (verified by
+      # checking the live site's rendered member count matches expectations) -- docfx falls back to a TFM its
+      # internal build CAN resolve. Left as a known cosmetic annotation rather than chased further.
       - name: Build docs
         run: |
           dotnet tool install --global docfx --version 2.74.1
