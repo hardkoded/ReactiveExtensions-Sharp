@@ -73,20 +73,6 @@ One line instead of a hand-rolled state machine — same retry-until-success-or-
 against puppeteer-sharp's real current `Locator` code, and how the rest of its rxjs-based internals
 (`waitForNetworkIdle`, `ScreenRecorder`) map onto RxSharp.
 
-## Status
-
-Broad RxJS parity. 100+ operators and creation functions, every one ported test-for-test against [RxJS 7.8.2](https://github.com/ReactiveX/rxjs/tree/7.8.2)'s own spec suite — not reinvented from a changelog, the actual upstream test cases. 800+ tests, all green in CI.
-
-- ✅ Core engine: `Observable<T>`, `Subscriber<T>`, `Subscription`, `Subject<T>`/`BehaviorSubject<T>`/`ReplaySubject<T>`/`AsyncSubject<T>`
-- ✅ The full Puppeteer-essential surface — every creation function, operator, and async bridge (`firstValueFrom`/`lastValueFrom`) that [Puppeteer](https://pptr.dev/) itself funnels its rxjs usage through, plus `RxSharp.Extras` — hand-built combinators (`Timeout`, `RetryAndRaceWithSignalAndTimer`, `FromCancellationToken`, `FilterAsync`) matching how Puppeteer actually uses rxjs internally for retry/timeout/cancellation
-- ✅ Validated end-to-end against a real, launched Chrome in a throwaway `puppeteer-sharp` playground branch — not just synthetic unit tests
-- ✅ The long tail: `groupBy`, `share`/`shareReplay` (with the full config surface — `resetOnError`/`resetOnComplete`/`resetOnRefCountZero`/custom `connector`), the entire `window*`/`buffer*` families, `debounce`/`audit`/`sample`/`throttle` families, `bindCallback`/`bindNodeCallback`, `partition`, `using`, `onErrorResumeNext`, higher-order flattening (`mergeAll`/`switchAll`/`combineLatestAll`/`zipAll`/...), and more
-- ✅ A `VirtualTimeScheduler` + marble-style `TestScheduler` for deterministic, virtual-time tests — the same testing idiom RxJS itself uses
-- ✅ [API docs](https://hardkoded.github.io/ReactiveExtensions-Sharp/), published on every release
-- 🚧 Optional, not blocking anything real: a full `Scheduler`/`Action` class hierarchy beyond `TaskPoolScheduler`/`VirtualTimeScheduler`, and standalone `connectable`/`publish`/`refCount` as their own API surface (`Share`/`ShareReplay` already cover the common case)
-
-See [CLAUDE.md](CLAUDE.md) for the full milestone history and the architectural decisions behind the port.
-
 ## Install
 
 ```
