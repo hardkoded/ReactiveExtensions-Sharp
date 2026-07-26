@@ -11,9 +11,6 @@ permissions:
   pages: write
   id-token: write
 
-env:
-  DOTNET_VERSION: '10.0.x'
-
 jobs:
   build:
     name: Publish docs
@@ -25,7 +22,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Build docs
         run: |
