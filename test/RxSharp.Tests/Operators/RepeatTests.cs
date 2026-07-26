@@ -1,4 +1,5 @@
 using RxSharp.Operators;
+using RxSharp.Subjects;
 
 namespace RxSharp.Tests.Operators;
 
@@ -113,10 +114,68 @@ public class RepeatTests
         Assert.That(completed, Is.True);
     }
 
-    // rxjs's "should stop listening to a synchronous observable when unsubscribed" test (repeat() + take(3)
-    // atop a hand-rolled loop-based source) is not ported here: Repeat sits as an intermediate operator between
-    // the raw source and Take, and this port's disposal-linking only takes effect once the nested synchronous
-    // Subscribe call unwinds — i.e. after the loop already ran to completion. This is the same pre-existing,
-    // documented gap noted in AuditTests.cs/DebounceTests.cs/ThrottleTests.cs/WindowCountTests.cs, reproducible
-    // with Take alone (see CLAUDE.md's Learnings), not specific to Repeat.
+    // rxjs's "should stop listening to a synchronous observable when unsubscribed" test, ported now that the
+    // M6 disposal-cascade fix (see CLAUDE.md's Learnings) applies here too: Repeat's per-cycle cycleSubscriber
+    // is registered as a child of the downstream subscriber before subscribing, so a downstream Take completing
+    // early correctly cascades up and stops a fully-synchronous, self-checking source mid-loop.
+    [Test]
+    public void ShouldStopListeningToASynchronousObservableWhenUnsubscribed()
+    {
+        var sideEffects = new List<int>();
+        var synchronousObservable = new Observable<int>(subscriber =>
+        {
+            for (var i = 0; !subscriber.IsDisposed && i < 10; i++)
+            {
+                sideEffects.Add(i);
+                subscriber.OnNext(i);
+            }
+        });
+
+        synchronousObservable.Repeat().Take(3).Subscribe(_ => { });
+
+        Assert.That(sideEffects, Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
+    [Test]
+    public void ShouldRepeatUsingANotifierSelectorDelay()
+    {
+        var results = new List<string>();
+        var completed = false;
+        var cycleCount = 0;
+        var delaysRequested = new List<int>();
+        var notifier = new Subject<Unit>();
+
+        Observable.Of("a", "b").Repeat<string, Unit>(cycle =>
+        {
+            cycleCount++;
+            delaysRequested.Add(cycle);
+            return notifier.AsObservable();
+        }, count: 3).Subscribe(results.Add, onComplete: () => completed = true);
+
+        Assert.That(delaysRequested, Is.EqualTo(new[] { 1 }));
+        Assert.That(results, Is.EqualTo(new[] { "a", "b" }), "should wait for the notifier before repeating");
+
+        notifier.OnNext(Unit.Default);
+
+        Assert.That(delaysRequested, Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(results, Is.EqualTo(new[] { "a", "b", "a", "b" }));
+        Assert.That(completed, Is.False);
+
+        notifier.OnNext(Unit.Default);
+
+        Assert.That(results, Is.EqualTo(new[] { "a", "b", "a", "b", "a", "b" }));
+        Assert.That(completed, Is.True, "count of 3 total cycles has been reached, no third delay should be requested");
+        Assert.That(cycleCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ShouldPropagateErrorThrownFromTheRepeatDelaySelectorFunction()
+    {
+        var thrown = new InvalidOperationException("selector boom");
+        Exception? received = null;
+
+        Observable.Of(1).Repeat<int, Unit>(_ => throw thrown).Subscribe(onError: err => received = err);
+
+        Assert.That(received, Is.SameAs(thrown));
+    }
 }
