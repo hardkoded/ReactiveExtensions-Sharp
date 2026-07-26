@@ -42,6 +42,33 @@ Observable.Interval(TimeSpan.FromSeconds(1))
 <sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+## What about `pipe`?
+
+RxJS's `pipe(op1, op2, op3)` is mostly just method chaining wearing a different hat — `source.Map(...).Filter(...)`
+above *is* the translation. But RxJS's `pipe()` has a second job: called on its own (not as an `Observable`
+method), it builds a **reusable** transformation out of several operators, so you can define it once and apply
+it to multiple streams. RxSharp covers that with `OperatorFunction<TSource, TResult>` + `Pipe`:
+
+<!-- snippet: pipe-csharp -->
+<a id='snippet-pipe-csharp'></a>
+```cs
+public static void Run(Observable<int> numbersA, Observable<int> numbersB)
+{
+    // A reusable transformation, defined once - the equivalent of RxJS's standalone
+    // `const squareAndFilterEven = pipe(map(x => x * x), filter(x => x % 2 === 0));`
+    OperatorFunction<int, int> squareAndFilterEven = source => source.Map(x => x * x).Filter(x => x % 2 == 0);
+
+    numbersA.Pipe(squareAndFilterEven).Subscribe(x => Console.WriteLine(x));
+    numbersB.Pipe(squareAndFilterEven).Subscribe(x => Console.WriteLine(x));
+}
+```
+<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/PipeSample.cs#L11-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-pipe-csharp' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+There's no hand-written 9-arity `pipe(op1, op2, ..., op9)` overload set, deliberately — it exists in RxJS mainly
+to work around JS not having method chaining with generics the way C# does. `Pipe` here only takes a single,
+already-composed `OperatorFunction`; build that function with ordinary chaining, same as everywhere else.
+
 ## The example that started this project
 
 [Puppeteer](https://pptr.dev/) (the JS browser-automation library) builds its `Locator.click()`/`.fill()` actions
@@ -67,11 +94,6 @@ public static async Task<string> FindElementOnceItRendersAsync(Func<Task<string>
 ```
 <sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/RetryUntilTimeoutSample.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-retry-until-timeout-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
-
-One line instead of a hand-rolled state machine — same retry-until-success-or-timeout-or-cancel behavior. See
-[`handoff/puppeteer-sharp-integration.md`](handoff/puppeteer-sharp-integration.md) for the actual before/after
-against puppeteer-sharp's real current `Locator` code, and how the rest of its rxjs-based internals
-(`waitForNetworkIdle`, `ScreenRecorder`) map onto RxSharp.
 
 ## Install
 
