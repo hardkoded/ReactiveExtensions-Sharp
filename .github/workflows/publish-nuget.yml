@@ -12,6 +12,9 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required to request the GitHub OIDC token for NuGet Trusted Publishing
+
     steps:
       - uses: actions/checkout@v5
 
@@ -26,8 +29,15 @@ jobs:
       - name: Build
         run: dotnet build src/RxSharp/RxSharp.csproj --configuration Release --no-restore
 
+      # Trusted Publishing (https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing): exchanges a
+      # short-lived GitHub OIDC token for a temporary NuGet API key, valid 1 hour, instead of storing a long-lived
+      # API key as a repo secret. Requires a Trusted Publishing policy configured on nuget.org for this exact repo
+      # + workflow file (see CLAUDE.md for the one-time setup steps).
+      - name: NuGet login (OIDC -> temp API key)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push to nuget.org
-        env:
-          NUGET_TOKEN_EXISTS: ${{ secrets.NUGET_API_KEY }}
-        if: env.NUGET_TOKEN_EXISTS != ''
-        run: dotnet nuget push ./src/RxSharp/bin/Release/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push ./src/RxSharp/bin/Release/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
