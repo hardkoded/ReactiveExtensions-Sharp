@@ -28,5 +28,5 @@ public static class ShareReplayOperator
     /// <param name="bufferSize">The maximum number of most-recent values to replay to each new subscriber. Unbounded by default.</param>
     /// <returns>A multicast, replaying observable that shares one subscription to <paramref name="source"/> among all its subscribers.</returns>
     public static Observable<T> ShareReplay<T>(this Observable<T> source, int bufferSize = int.MaxValue)
-        => ShareCore.Multicast(source, () => new ReplaySubject<T>(bufferSize), resetOnComplete: false);
+        => ShareCore.Multicast(source, () => new ReplaySubject<T>(bufferSize), resetOnError: true, resetOnComplete: false, resetOnRefCountZero: true);
 }

@@ -4,23 +4,26 @@ namespace RxSharp;
 
 /// <summary>
 /// Shared multicast/reset subscription logic behind the <c>Share</c> and <c>ShareReplay</c> operators. Connects
-/// to the source on the first subscriber. Whenever the subscriber count drops back to zero purely from
-/// unsubscription (the source itself hasn't errored or completed), the connector is dropped and a later
-/// subscription reconnects to the source from scratch -- this is rxjs's <c>resetOnRefCountZero: true</c>, always
-/// on here (this port doesn't implement the reset-notifier-observable knobs, just the common boolean case).
+/// to the source on the first subscriber. Each of the three reset triggers (source error, source completion,
+/// subscriber count dropping back to zero) is independently configurable via a plain <see cref="bool"/> -- this
+/// port doesn't implement rxjs's reset-notifier-observable knobs, just the common boolean case (see
+/// <see cref="RxSharp.Operators.ShareConfig{T}"/>'s remarks for why).
 /// </summary>
 internal static class ShareCore
 {
     /// <remarks>
-    /// <paramref name="resetOnComplete"/> is the one behavioral knob exposed to callers, because it's what
-    /// actually distinguishes rxjs's two operators: <c>share()</c> defaults <c>resetOnComplete: true</c> (a
-    /// completed source goes fully cold again -- a later subscriber gets a fresh connector and resubscribes to
-    /// the source), while <c>shareReplay()</c> defaults it to <c>false</c> (a completed source's buffered values
-    /// keep replaying to every later subscriber forever, without ever resubscribing -- the caching behavior
-    /// shareReplay is used for). <c>resetOnError</c> is always <c>true</c> for both operators here (matches
-    /// rxjs's default for both), since neither operator needs it configurable.
+    /// <paramref name="resetOnComplete"/> is what distinguishes rxjs's two default configs: <c>share()</c>
+    /// defaults it <c>true</c> (a completed source goes fully cold again -- a later subscriber gets a fresh
+    /// connector and resubscribes to the source), while <c>shareReplay()</c> defaults it to <c>false</c> (a
+    /// completed source's buffered values keep replaying to every later subscriber forever, without ever
+    /// resubscribing -- the caching behavior shareReplay is used for).
     /// </remarks>
-    public static Observable<T> Multicast<T>(Observable<T> source, Func<Subject<T>> connectorFactory, bool resetOnComplete)
+    public static Observable<T> Multicast<T>(
+        Observable<T> source,
+        Func<Subject<T>> connectorFactory,
+        bool resetOnError,
+        bool resetOnComplete,
+        bool resetOnRefCountZero)
     {
         var gate = new object();
         Subject<T>? connector = null;
@@ -62,7 +65,11 @@ internal static class ShareCore
                     {
                         connectorSubscription.Dispose();
                         refCount--;
-                        if (refCount == 0 && !hasCompleted && !hasErrored)
+
+                        // Only a plain unsubscribe-driven drop to zero goes through this reset path -- if the
+                        // source already errored/completed, that terminal event's own resetOnError/resetOnComplete
+                        // handling already decided whether to reset, and resetOnRefCountZero must not re-decide it.
+                        if (refCount == 0 && !hasCompleted && !hasErrored && resetOnRefCountZero)
                         {
                             var teardown = sourceSubscription;
                             Reset();
@@ -94,9 +101,12 @@ internal static class ShareCore
 
                             activeConnector.OnError(err);
 
-                            lock (gate)
+                            if (resetOnError)
                             {
-                                Reset();
+                                lock (gate)
+                                {
+                                    Reset();
+                                }
                             }
                         },
                         onComplete: () =>
