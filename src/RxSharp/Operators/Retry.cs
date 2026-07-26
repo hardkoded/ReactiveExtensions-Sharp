@@ -1,6 +1,15 @@
 namespace RxSharp.Operators;
 
 /// <summary>Extension methods implementing the <c>retry</c> operator.</summary>
+/// <remarks>
+/// rxjs's <c>retry</c> accepts either a plain retry count or a single <c>RetryConfig</c> object combining
+/// <c>count</c>, <c>delay</c> (a fixed number of milliseconds, or a per-error notifier-returning function), and
+/// <c>resetOnSuccess</c>. C# has no object-literal equivalent that reads as naturally as rxjs's, so this port
+/// splits that one config object into two overloads instead: the original <see cref="Retry{T}"/> (count + an
+/// optional fixed <see cref="TimeSpan"/> delay + <c>resetOnSuccess</c>), and <see cref="Retry{T, TNotification}"/>
+/// (count + a per-error notifier-selector delay + <c>resetOnSuccess</c>) for the function-based delay form. Both
+/// funnel into the same private <see cref="RetryCore{T, TNotification}"/> implementation.
+/// </remarks>
 public static class RetryOperator
 {
     /// <summary>
@@ -10,10 +19,8 @@ public static class RetryOperator
     /// downstream; a retry only affects what happens after the error.
     /// </summary>
     /// <remarks>
-    /// This is a reduced form of rxjs's <c>retry</c>: it supports a retry count and, optionally, a single fixed
-    /// delay before each resubscription (via a <c>Timer</c> on <paramref name="scheduler"/>), but not rxjs's
-    /// full <c>RetryConfig</c> object — there is no <c>resetOnSuccess</c> option, and <paramref name="delay"/>
-    /// cannot be a per-error notifier function, only a constant <see cref="TimeSpan"/>.
+    /// This overload covers rxjs's <c>RetryConfig</c> with a plain numeric or omitted <c>delay</c> (or none at
+    /// all). For a per-error notifier-observable delay, use <see cref="Retry{T, TNotification}"/> instead.
     /// </remarks>
     /// <typeparam name="T">The type of values emitted by <paramref name="source"/>.</typeparam>
     /// <param name="source">The source sequence to retry on error.</param>
@@ -27,15 +34,68 @@ public static class RetryOperator
     /// resubscription happens immediately after the error.
     /// </param>
     /// <param name="scheduler">The scheduler used to time <paramref name="delay"/>, if provided.</param>
+    /// <param name="resetOnSuccess">
+    /// If <see langword="true"/>, the retry counter resets to zero the moment <paramref name="source"/> emits
+    /// its first value after a resubscription — so a long-running stream that errors only intermittently never
+    /// exhausts its retry budget from historical errors. Defaults to <see langword="false"/>, matching rxjs.
+    /// </param>
     /// <returns>An observable that mirrors <paramref name="source"/>, retrying on error as described above.</returns>
-    public static Observable<T> Retry<T>(this Observable<T> source, int count = int.MaxValue, TimeSpan? delay = null, IScheduler? scheduler = null)
+    public static Observable<T> Retry<T>(this Observable<T> source, int count = int.MaxValue, TimeSpan? delay = null, IScheduler? scheduler = null, bool resetOnSuccess = false)
     {
         if (count <= 0)
         {
             return source;
         }
 
-        return source.Operate<T, T>((src, subscriber) =>
+        return RetryCore<T, long>(
+            source,
+            count,
+            resetOnSuccess,
+            delay is { } fixedDelay ? (_, _) => Observable.Timer(fixedDelay, scheduler) : null);
+    }
+
+    /// <summary>
+    /// Resubscribes to <paramref name="source"/> whenever it errors, up to <paramref name="count"/> times, but
+    /// waits for the observable returned by <paramref name="delaySelector"/> to emit before each resubscription
+    /// instead of resubscribing immediately or after a fixed delay.
+    /// </summary>
+    /// <remarks>
+    /// This is the function-based form of rxjs's <c>RetryConfig.delay</c>. <paramref name="delaySelector"/> is
+    /// called with the error that just occurred and the current 1-based retry attempt number, and must return a
+    /// notifier observable: its first emission triggers the resubscription, an early completion (without ever
+    /// emitting) completes the whole sequence instead of retrying, and an error is forwarded downstream via
+    /// <c>OnError</c> in place of the original error. If <paramref name="delaySelector"/> itself throws, that
+    /// exception is forwarded via <c>OnError</c> too.
+    /// </remarks>
+    /// <typeparam name="T">The type of values emitted by <paramref name="source"/>.</typeparam>
+    /// <typeparam name="TNotification">The element type of the observable returned by <paramref name="delaySelector"/>; only its emissions/termination matter, not the values themselves.</typeparam>
+    /// <param name="source">The source sequence to retry on error.</param>
+    /// <param name="delaySelector">
+    /// A function, called with the error that just occurred and the current 1-based retry attempt number, that
+    /// returns an observable whose first emission triggers the resubscription.
+    /// </param>
+    /// <param name="count">The maximum number of resubscriptions to attempt after an error. Defaults to <see cref="int.MaxValue"/>.</param>
+    /// <param name="resetOnSuccess">
+    /// If <see langword="true"/>, the retry counter resets to zero the moment <paramref name="source"/> emits
+    /// its first value after a resubscription. Defaults to <see langword="false"/>, matching rxjs.
+    /// </param>
+    /// <returns>An observable that mirrors <paramref name="source"/>, retrying on error as described above.</returns>
+    public static Observable<T> Retry<T, TNotification>(this Observable<T> source, Func<Exception, int, Observable<TNotification>> delaySelector, int count = int.MaxValue, bool resetOnSuccess = false)
+    {
+        if (count <= 0)
+        {
+            return source;
+        }
+
+        return RetryCore(source, count, resetOnSuccess, delaySelector);
+    }
+
+    private static Observable<T> RetryCore<T, TNotification>(
+        Observable<T> source,
+        int count,
+        bool resetOnSuccess,
+        Func<Exception, int, Observable<TNotification>>? delaySelector)
+        => source.Operate<T, T>((src, subscriber) =>
         {
             var soFar = 0;
 
@@ -61,7 +121,15 @@ public static class RetryOperator
                 // unboundedly across many retries.
                 Subscriber<T> attemptSubscriber = null!;
                 attemptSubscriber = Subscriber.Create<T>(
-                    onNext: subscriber.OnNext,
+                    onNext: value =>
+                    {
+                        if (resetOnSuccess)
+                        {
+                            soFar = 0;
+                        }
+
+                        subscriber.OnNext(value);
+                    },
                     onError: err =>
                     {
                         subscriber.Remove(attemptSubscriber);
@@ -74,17 +142,34 @@ public static class RetryOperator
 
                         if (soFar++ < count)
                         {
-                            if (delay is { } d)
+                            if (delaySelector is not null)
                             {
-                                Subscriber<long> timerSubscriber = null!;
-                                timerSubscriber = Subscriber.Create<long>(onNext: _ =>
+                                Observable<TNotification> notifier;
+                                try
                                 {
-                                    subscriber.Remove(timerSubscriber);
-                                    timerSubscriber.Dispose();
-                                    SubscribeForRetry();
-                                });
-                                subscriber.Add(timerSubscriber);
-                                Observable.Timer(d, scheduler).Subscribe(timerSubscriber);
+                                    notifier = delaySelector(err, soFar);
+                                }
+                                catch (Exception ex)
+                                {
+                                    subscriber.OnError(ex);
+                                    return;
+                                }
+
+                                // Rebuilt fresh per attempt (unlike SubscribeChild's single-lifetime target), so
+                                // it must be Remove()'d once it fires — see attemptSubscriber's own comment above
+                                // for the same reasoning applied to the notifier instead of the source attempt.
+                                Subscriber<TNotification> notifierSubscriber = null!;
+                                notifierSubscriber = Subscriber.Create<TNotification>(
+                                    onNext: _ =>
+                                    {
+                                        subscriber.Remove(notifierSubscriber);
+                                        notifierSubscriber.Dispose();
+                                        SubscribeForRetry();
+                                    },
+                                    onError: subscriber.OnError,
+                                    onComplete: subscriber.OnCompleted);
+                                subscriber.Add(notifierSubscriber);
+                                notifier.Subscribe(notifierSubscriber);
                             }
                             else
                             {
@@ -110,5 +195,4 @@ public static class RetryOperator
             SubscribeForRetry();
             return null;
         });
-    }
 }
