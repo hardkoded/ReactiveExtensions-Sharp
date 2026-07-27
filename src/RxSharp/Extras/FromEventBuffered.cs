@@ -4,7 +4,7 @@ namespace RxSharp.Extras;
 
 /// <summary>
 /// A handle to an eagerly-attached, buffered .NET event source created by
-/// <see cref="FromEventBufferedExtras"/>. Disposing detaches the underlying event handler.
+/// <see cref="PuppeteerExtras.FromEventBuffered{TDelegate, TEventArgs}"/>. Disposing detaches the underlying event handler.
 /// </summary>
 /// <typeparam name="TEventArgs">The type of the event's payload.</typeparam>
 public sealed class BufferedEventSource<TEventArgs> : IDisposable
@@ -42,7 +42,7 @@ public sealed class BufferedEventSource<TEventArgs> : IDisposable
 }
 
 /// <summary>Extension methods providing an eagerly-attached, buffered variant of <see cref="Observable.FromEvent{TEventArgs}"/>.</summary>
-public static class FromEventBufferedExtras
+public static partial class PuppeteerExtras
 {
     /// <summary>
     /// Like <see cref="Observable.FromEvent{TDelegate, TEventArgs}"/>, but attaches the underlying event handler

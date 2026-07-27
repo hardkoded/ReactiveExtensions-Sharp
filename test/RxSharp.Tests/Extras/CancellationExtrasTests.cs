@@ -12,7 +12,7 @@ public class CancellationExtrasTests
         cts.Cancel();
 
         Exception? received = null;
-        CancellationExtras.FromCancellationToken(cts.Token).Subscribe(onError: err => received = err);
+        PuppeteerExtras.FromCancellationToken(cts.Token).Subscribe(onError: err => received = err);
 
         Assert.That(received, Is.InstanceOf<OperationCanceledException>());
     }
@@ -22,7 +22,7 @@ public class CancellationExtrasTests
     {
         using var cts = new CancellationTokenSource();
         Exception? received = null;
-        CancellationExtras.FromCancellationToken(cts.Token).Subscribe(onError: err => received = err);
+        PuppeteerExtras.FromCancellationToken(cts.Token).Subscribe(onError: err => received = err);
 
         Assert.That(received, Is.Null);
 
@@ -36,7 +36,7 @@ public class CancellationExtrasTests
     {
         using var cts = new CancellationTokenSource();
         var nextCalled = false;
-        var subscription = CancellationExtras.FromCancellationToken(cts.Token).Subscribe(_ => nextCalled = true);
+        var subscription = PuppeteerExtras.FromCancellationToken(cts.Token).Subscribe(_ => nextCalled = true);
 
         subscription.Dispose();
         cts.Cancel();
@@ -52,7 +52,7 @@ public class CancellationExtrasTests
         var cause = new InvalidOperationException("custom cause");
 
         Exception? received = null;
-        CancellationExtras.FromCancellationToken(cts.Token, () => cause).Subscribe(onError: err => received = err);
+        PuppeteerExtras.FromCancellationToken(cts.Token, () => cause).Subscribe(onError: err => received = err);
 
         Assert.That(received, Is.SameAs(cause));
     }

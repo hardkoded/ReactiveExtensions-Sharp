@@ -3,11 +3,11 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods widening an error-only <see cref="Observable{T}"/> to another element type.</summary>
-public static class AssumeNeverEmitsExtras
+public static partial class PuppeteerExtras
 {
     /// <summary>
     /// Widens an <see cref="Observable{Unit}"/> that only ever calls <see cref="IObserver{T}.OnError"/> (such as
-    /// <see cref="CancellationExtras.FromCancellationToken"/> or <see cref="TimeoutExtras.Timeout"/>) so it
+    /// <see cref="PuppeteerExtras.FromCancellationToken"/> or <see cref="PuppeteerExtras.Timeout"/>) so it
     /// type-checks anywhere an <see cref="Observable{T}"/> is expected - most commonly as one of the branches
     /// passed to <see cref="RaceOperator.RaceWith{T}"/> alongside a source that actually produces
     /// <typeparamref name="TResult"/> values. Mirrors how rxjs relies on TypeScript structurally accepting

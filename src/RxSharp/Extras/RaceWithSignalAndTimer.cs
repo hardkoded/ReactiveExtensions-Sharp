@@ -3,11 +3,11 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods racing a single subscription against cancellation and a timeout.</summary>
-public static class RaceWithSignalAndTimerExtras
+public static partial class PuppeteerExtras
 {
     /// <summary>
     /// Races <paramref name="source"/> against cancellation and a timeout, whichever fires first. The
-    /// non-retrying half of <see cref="RetryAndRaceWithSignalAndTimerExtras.RetryAndRaceWithSignalAndTimer{T}(Observable{T}, TimeSpan, Func{Exception}, TimeSpan?, CancellationToken)"/>
+    /// non-retrying half of <see cref="PuppeteerExtras.RetryAndRaceWithSignalAndTimer{T}(Observable{T}, TimeSpan, Func{Exception}, TimeSpan?, CancellationToken)"/>
     /// - use this directly for a single wait (e.g. "wait for the next matching event") that doesn't need
     /// retrying, and reach for the retrying combinator when it does.
     /// </summary>
@@ -17,7 +17,7 @@ public static class RaceWithSignalAndTimerExtras
     /// <param name="causeFactory">
     /// Produces the exception used for both the cancellation and timeout branches. Defaults to
     /// <see cref="OperationCanceledException"/> for cancellation and <see cref="TimeoutException"/> for the timeout,
-    /// via the defaults of <see cref="CancellationExtras.FromCancellationToken"/> and <see cref="TimeoutExtras.Timeout"/> respectively.
+    /// via the defaults of <see cref="PuppeteerExtras.FromCancellationToken"/> and <see cref="PuppeteerExtras.Timeout"/> respectively.
     /// Since one factory covers both branches, a caller needing to tell the two apart by exception type should
     /// pass <see langword="null"/> here (so each branch keeps its own distinct default type) and catch/rethrow
     /// as needed at the call site.
@@ -30,8 +30,8 @@ public static class RaceWithSignalAndTimerExtras
         Func<Exception>? causeFactory,
         CancellationToken cancellationToken)
         => source.RaceWith(
-            CancellationExtras.FromCancellationToken(cancellationToken, causeFactory).AssumeNeverEmits<T>(),
-            TimeoutExtras.Timeout(timeout, causeFactory).AssumeNeverEmits<T>());
+            PuppeteerExtras.FromCancellationToken(cancellationToken, causeFactory).AssumeNeverEmits<T>(),
+            PuppeteerExtras.Timeout(timeout, causeFactory).AssumeNeverEmits<T>());
 
     /// <summary>
     /// Overload of <see cref="RaceWithSignalAndTimer{T}(Observable{T}, TimeSpan, Func{Exception}, CancellationToken)"/>
