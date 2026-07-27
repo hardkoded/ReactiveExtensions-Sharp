@@ -3,7 +3,7 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods providing a standalone, <see cref="TimeoutException"/>-throwing timer observable.</summary>
-public static class TimeoutExtras
+public static partial class Extensions
 {
     /// <summary>
     /// An observable that never emits and errors after <paramref name="delay"/> elapses, or never errors at all if
@@ -25,9 +25,9 @@ public static class TimeoutExtras
             return Observable.Never<Unit>();
         }
 
-        var makeCause = causeFactory ?? DefaultCause;
+        var makeCause = causeFactory ?? DefaultTimeoutCause;
         return Observable.Timer(delay, scheduler).Map<long, Unit>(_ => throw makeCause());
     }
 
-    private static Exception DefaultCause() => new TimeoutException();
+    private static Exception DefaultTimeoutCause() => new TimeoutException();
 }

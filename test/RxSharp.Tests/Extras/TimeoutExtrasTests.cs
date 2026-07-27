@@ -11,7 +11,7 @@ public class TimeoutExtrasTests
         using var signal = new ManualResetEventSlim();
         Exception? received = null;
 
-        TimeoutExtras.Timeout(TimeSpan.FromMilliseconds(20)).Subscribe(onError: err =>
+        Extensions.Timeout(TimeSpan.FromMilliseconds(20)).Subscribe(onError: err =>
         {
             received = err;
             signal.Set();
@@ -25,7 +25,7 @@ public class TimeoutExtrasTests
     public void ShouldNeverErrorWhenDelayIsZero()
     {
         var errored = false;
-        TimeoutExtras.Timeout(TimeSpan.Zero).Subscribe(onError: _ => errored = true);
+        Extensions.Timeout(TimeSpan.Zero).Subscribe(onError: _ => errored = true);
 
         Thread.Sleep(50);
 
@@ -39,7 +39,7 @@ public class TimeoutExtrasTests
         var cause = new InvalidOperationException("custom timeout cause");
         Exception? received = null;
 
-        TimeoutExtras.Timeout(TimeSpan.FromMilliseconds(10), () => cause).Subscribe(onError: err =>
+        Extensions.Timeout(TimeSpan.FromMilliseconds(10), () => cause).Subscribe(onError: err =>
         {
             received = err;
             signal.Set();

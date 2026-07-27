@@ -1,7 +1,7 @@
 namespace RxSharp.Extras;
 
 /// <summary>Puppeteer-flavored combinators built on top of the core primitives — the C# analogues of the helpers Puppeteer itself layers on top of rxjs (see CLAUDE.md's "Puppeteer-essential surface").</summary>
-public static class CancellationExtras
+public static partial class Extensions
 {
     /// <summary>
     /// An observable that never emits and errors as soon as <paramref name="cancellationToken"/> is cancelled.
@@ -18,7 +18,7 @@ public static class CancellationExtras
     public static Observable<Unit> FromCancellationToken(CancellationToken cancellationToken, Func<Exception>? causeFactory = null)
         => new Observable<Unit>(subscriber =>
         {
-            var makeCause = causeFactory ?? DefaultCause;
+            var makeCause = causeFactory ?? DefaultCancellationCause;
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -30,5 +30,5 @@ public static class CancellationExtras
             return new Subscription(() => registration.Dispose());
         });
 
-    private static Exception DefaultCause() => new OperationCanceledException();
+    private static Exception DefaultCancellationCause() => new OperationCanceledException();
 }
