@@ -36,9 +36,7 @@ public static class RetryAndRaceWithSignalAndTimerExtras
         CancellationToken cancellationToken)
         => source
             .Retry(delay: retryDelay ?? TimeSpan.FromMilliseconds(50))
-            .RaceWith(
-                CancellationExtras.FromCancellationToken(cancellationToken, causeFactory).Map<Unit, T>(NeverReached<T>),
-                TimeoutExtras.Timeout(timeout, causeFactory).Map<Unit, T>(NeverReached<T>));
+            .RaceWithSignalAndTimer(timeout, causeFactory, cancellationToken);
 
     /// <summary>
     /// Overload of <see cref="RetryAndRaceWithSignalAndTimer{T}(Observable{T}, TimeSpan, Func{Exception}, TimeSpan?, CancellationToken)"/>
@@ -51,9 +49,4 @@ public static class RetryAndRaceWithSignalAndTimerExtras
     /// <returns>An observable that retries <paramref name="source"/> until it succeeds, times out, or is cancelled.</returns>
     public static Observable<T> RetryAndRaceWithSignalAndTimer<T>(this Observable<T> source, TimeSpan timeout, CancellationToken cancellationToken)
         => source.RetryAndRaceWithSignalAndTimer(timeout, causeFactory: null, retryDelay: null, cancellationToken);
-
-    // FromCancellationToken/Timeout only ever call OnError, never OnNext — this projection exists purely so
-    // the two Observable<Unit> notifiers type-check inside RaceWith(Observable<T>), matching how rxjs relies
-    // on TypeScript accepting Observable<never> anywhere an Observable<T> is expected. C# has no bottom type.
-    private static TResult NeverReached<TResult>(Unit value) => throw new InvalidOperationException("unreachable: this observable only ever errors");
 }
