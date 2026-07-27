@@ -26,7 +26,7 @@ interval(1000)
   .subscribe(x => console.log(x));
 ```
 
-The C# is close enough to read side by side — real, compiling code, not pseudocode:
+Same pipeline in RxSharp — real, compiling code:
 
 <!-- snippet: quick-taste-csharp -->
 <a id='snippet-quick-taste-csharp'></a>
