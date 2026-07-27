@@ -3,7 +3,7 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods composing retry, cancellation, and timeout into the single combinator Puppeteer's <c>Locator</c> actions rely on.</summary>
-public static partial class Extensions
+public static partial class RxExtensions
 {
     /// <summary>
     /// The combinator behind Puppeteer's <c>Locator</c> actions (click/fill/hover/wait): retry the source
@@ -13,7 +13,7 @@ public static partial class Extensions
     /// that may not have rendered yet") while still giving up promptly, either because the caller cancelled it
     /// or because it took longer than <paramref name="timeout"/> — whichever happens first. Since the cancellation
     /// and timeout branches are <see cref="Observable{T}"/> sources that only ever error (see
-    /// <see cref="Extensions.FromCancellationToken"/> and <see cref="Extensions.Timeout"/>), the only way
+    /// <see cref="RxExtensions.FromCancellationToken"/> and <see cref="RxExtensions.Timeout"/>), the only way
     /// this combinator produces a value is if the retried <paramref name="source"/> itself emits one before either
     /// branch fires.
     /// </summary>
@@ -23,7 +23,7 @@ public static partial class Extensions
     /// <param name="causeFactory">
     /// Produces the exception used for both the cancellation and timeout branches. Defaults to
     /// <see cref="OperationCanceledException"/> for cancellation and <see cref="TimeoutException"/> for the timeout,
-    /// via the defaults of <see cref="Extensions.FromCancellationToken"/> and <see cref="Extensions.Timeout"/> respectively.
+    /// via the defaults of <see cref="RxExtensions.FromCancellationToken"/> and <see cref="RxExtensions.Timeout"/> respectively.
     /// </param>
     /// <param name="retryDelay">The delay between retry attempts. Defaults to 50 milliseconds.</param>
     /// <param name="cancellationToken">A token that, when cancelled, aborts the whole operation immediately.</param>

@@ -4,7 +4,7 @@ namespace RxSharp.Extras;
 
 /// <summary>
 /// A handle to an eagerly-attached, buffered .NET event source created by
-/// <see cref="Extensions.FromEventBuffered{TDelegate, TEventArgs}"/>. Disposing detaches the underlying event handler.
+/// <see cref="RxExtensions.FromEventBuffered{TDelegate, TEventArgs}"/>. Disposing detaches the underlying event handler.
 /// </summary>
 /// <typeparam name="TEventArgs">The type of the event's payload.</typeparam>
 public sealed class BufferedEventSource<TEventArgs> : IDisposable
@@ -42,7 +42,7 @@ public sealed class BufferedEventSource<TEventArgs> : IDisposable
 }
 
 /// <summary>Extension methods providing an eagerly-attached, buffered variant of <see cref="Observable.FromEvent{TEventArgs}"/>.</summary>
-public static partial class Extensions
+public static partial class RxExtensions
 {
     /// <summary>
     /// Like <see cref="Observable.FromEvent{TDelegate, TEventArgs}"/>, but attaches the underlying event handler
@@ -68,7 +68,14 @@ public static partial class Extensions
     /// <param name="addHandler">Called immediately, with the handler to add to the event.</param>
     /// <param name="removeHandler">Called on <see cref="BufferedEventSource{TEventArgs}.Dispose"/>, with the same handler, to remove it from the event.</param>
     /// <param name="conversion">Converts an <see cref="Action{TEventArgs}"/> callback into the event's actual delegate shape.</param>
-    /// <param name="bufferSize">The maximum number of most-recent payloads kept for replay. Defaults to 1.</param>
+    /// <param name="bufferSize">
+    /// The maximum number of most-recent payloads kept for replay. Defaults to 1 - fine if the caller only
+    /// cares about the single most recent payload, but a real risk if the caller filters for a specific match
+    /// among possibly-several payloads that could arrive in the pre-subscribe gap this method exists to cover:
+    /// with the default of 1, a matching payload can be silently evicted from the buffer by a later
+    /// non-matching one before anyone subscribes to see it. Pass a larger value whenever more than one payload
+    /// could plausibly arrive before subscription and only some of them are what the caller is looking for.
+    /// </param>
     /// <returns>A handle exposing the buffered payloads as an observable, and detaching the handler on disposal.</returns>
     public static BufferedEventSource<TEventArgs> FromEventBuffered<TDelegate, TEventArgs>(
         Action<TDelegate> addHandler,
@@ -86,7 +93,14 @@ public static partial class Extensions
     /// <typeparam name="TEventArgs">The type of the event's payload.</typeparam>
     /// <param name="addHandler">Called immediately, with the handler to add to the event.</param>
     /// <param name="removeHandler">Called on <see cref="BufferedEventSource{TEventArgs}.Dispose"/>, with the same handler, to remove it from the event.</param>
-    /// <param name="bufferSize">The maximum number of most-recent payloads kept for replay. Defaults to 1.</param>
+    /// <param name="bufferSize">
+    /// The maximum number of most-recent payloads kept for replay. Defaults to 1 - fine if the caller only
+    /// cares about the single most recent payload, but a real risk if the caller filters for a specific match
+    /// among possibly-several payloads that could arrive in the pre-subscribe gap this method exists to cover:
+    /// with the default of 1, a matching payload can be silently evicted from the buffer by a later
+    /// non-matching one before anyone subscribes to see it. Pass a larger value whenever more than one payload
+    /// could plausibly arrive before subscription and only some of them are what the caller is looking for.
+    /// </param>
     /// <returns>A handle exposing the buffered payloads as an observable, and detaching the handler on disposal.</returns>
     public static BufferedEventSource<TEventArgs> FromEventBuffered<TEventArgs>(
         Action<EventHandler<TEventArgs>> addHandler,

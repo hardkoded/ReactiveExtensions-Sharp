@@ -1,7 +1,7 @@
 namespace RxSharp.Extras;
 
 /// <summary>Puppeteer-flavored combinators built on top of the core primitives — the C# analogues of the helpers Puppeteer itself layers on top of rxjs (see CLAUDE.md's "Puppeteer-essential surface").</summary>
-public static partial class Extensions
+public static partial class RxExtensions
 {
     /// <summary>
     /// An observable that never emits and errors as soon as <paramref name="cancellationToken"/> is cancelled.

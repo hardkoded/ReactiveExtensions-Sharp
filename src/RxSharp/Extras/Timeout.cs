@@ -3,7 +3,7 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods providing a standalone, <see cref="TimeoutException"/>-throwing timer observable.</summary>
-public static partial class Extensions
+public static partial class RxExtensions
 {
     /// <summary>
     /// An observable that never emits and errors after <paramref name="delay"/> elapses, or never errors at all if
