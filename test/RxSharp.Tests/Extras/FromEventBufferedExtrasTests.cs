@@ -17,7 +17,7 @@ public class FromEventBufferedExtrasTests
     {
         var manager = new FakeTargetManager();
 
-        using var source = Extensions.FromEventBuffered<string>(
+        using var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h);
 
@@ -35,7 +35,7 @@ public class FromEventBufferedExtrasTests
     public void ShouldReplayBufferedValuesToALateSubscriberThenDeliverLiveValues()
     {
         var manager = new FakeTargetManager();
-        using var source = Extensions.FromEventBuffered<string>(
+        using var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h);
 
@@ -52,7 +52,7 @@ public class FromEventBufferedExtrasTests
     public void ShouldDeliverToEveryIndependentSubscriber()
     {
         var manager = new FakeTargetManager();
-        using var source = Extensions.FromEventBuffered<string>(
+        using var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h);
 
@@ -71,7 +71,7 @@ public class FromEventBufferedExtrasTests
     public void ShouldOnlyReplayUpToTheRequestedBufferSize()
     {
         var manager = new FakeTargetManager();
-        using var source = Extensions.FromEventBuffered<string>(
+        using var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h,
             bufferSize: 2);
@@ -90,7 +90,7 @@ public class FromEventBufferedExtrasTests
     public void ShouldDetachTheHandlerOnDispose()
     {
         var manager = new FakeTargetManager();
-        var source = Extensions.FromEventBuffered<string>(
+        var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h);
 
@@ -106,7 +106,7 @@ public class FromEventBufferedExtrasTests
     public void ShouldBeSafeToDisposeMoreThanOnce()
     {
         var manager = new FakeTargetManager();
-        var source = Extensions.FromEventBuffered<string>(
+        var source = RxExtensions.FromEventBuffered<string>(
             h => manager.TargetCreated += h,
             h => manager.TargetCreated -= h);
 

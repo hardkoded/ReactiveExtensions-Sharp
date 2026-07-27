@@ -3,7 +3,7 @@ using RxSharp.Operators;
 namespace RxSharp.Extras;
 
 /// <summary>Extension methods providing an async-predicate flavor of <c>Filter</c>.</summary>
-public static partial class Extensions
+public static partial class RxExtensions
 {
     /// <summary>
     /// An operator supporting an async predicate, mirroring Puppeteer's own <c>filterAsync</c> helper (implemented,
