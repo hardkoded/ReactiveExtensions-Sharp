@@ -1,18 +1,18 @@
-# Handoff: integrating RxSharp into puppeteer-sharp
+# Handoff: integrating ReactiveExtensionsSharp into puppeteer-sharp
 
 This doc is written for whoever (human or agent) picks up the actual integration work: replacing
-puppeteer-sharp's hand-rolled async/retry/cancellation plumbing with RxSharp, the way upstream Puppeteer (JS)
+puppeteer-sharp's hand-rolled async/retry/cancellation plumbing with ReactiveExtensionsSharp, the way upstream Puppeteer (JS)
 uses rxjs for the same job. It assumes no prior context on this project beyond what's written here — read this
 top to bottom before touching code.
 
-## What RxSharp is
+## What ReactiveExtensionsSharp is
 
 - GitHub: [`hardkoded/ReactiveExtensions-Sharp`](https://github.com/hardkoded/ReactiveExtensions-Sharp) (directory
   on disk may still be named `rxjs-sharp`)
-- NuGet: `ReactiveExtensionsSharp` (the plain `RxSharp` name was taken; C# namespace is still `RxSharp`)
+- NuGet: `ReactiveExtensionsSharp` (the plain `ReactiveExtensionsSharp` name was taken; C# namespace is still `ReactiveExtensionsSharp`)
 - API docs: <https://hardkoded.github.io/ReactiveExtensions-Sharp/>
 - A faithful, test-for-test port of [RxJS 7.8.2](https://github.com/ReactiveX/rxjs/tree/7.8.2) — not a redesign,
-  not "Rx.NET but renamed." If you know the RxJS operator you're replacing, the RxSharp equivalent has the same
+  not "Rx.NET but renamed." If you know the RxJS operator you're replacing, the ReactiveExtensionsSharp equivalent has the same
   name, same semantics, same edge-case behavior, verified against RxJS's own upstream spec tests.
 - 800+ tests, all green, `TreatWarningsAsErrors` build, live NuGet package (Trusted Publishing, OIDC-based, no
   stored API key) and a GitHub Pages docs site, both wired to fire on version tags.
@@ -43,7 +43,7 @@ export {
 } from 'rxjs';
 ```
 
-**39 of these 40 symbols have a direct RxSharp equivalent, same name (PascalCase), same behavior.** The one
+**39 of these 40 symbols have a direct ReactiveExtensionsSharp equivalent, same name (PascalCase), same behavior.** The one
 exception is `pipe` — see "The one real idiom gap" below, it's intentional, not missing functionality.
 
 Puppeteer builds three real features on top of this list, all three now proven to work end-to-end against a
@@ -58,7 +58,7 @@ real launched Chrome (see "Proof this actually works" below):
 ## The one real idiom gap: `pipe()`
 
 RxJS's `pipe()` is a hand-written, overloaded-up-to-9-arguments function: `source$.pipe(map(f), filter(g),
-takeUntil(h$))`. RxSharp deliberately does **not** port that — see `CLAUDE.md`'s Core design section. The direct
+takeUntil(h$))`. ReactiveExtensionsSharp deliberately does **not** port that — see `CLAUDE.md`'s Core design section. The direct
 replacement idiom is **extension-method chaining**:
 
 ```csharp
@@ -76,7 +76,7 @@ Puppeteer's own code — none of them do anything with `pipe()` that chaining ca
 
 - **`FromEvent` is not a literal port.** RxJS's `fromEvent` duck-types across DOM `EventTarget`s, Node
   `EventEmitter`s, and a few other shapes. C# has no equivalent ambient duck-typing for "add/remove listener," so
-  RxSharp's `Observable.FromEvent` wraps a real **.NET event add/remove-handler pair** instead — the same idiom
+  ReactiveExtensionsSharp's `Observable.FromEvent` wraps a real **.NET event add/remove-handler pair** instead — the same idiom
   Rx.NET itself uses (`FromEvent<TDelegate, TEventArgs>`). Two overloads exist:
   - `FromEvent<TEventArgs>(Action<EventHandler<TEventArgs>> addHandler, Action<EventHandler<TEventArgs>> removeHandler)`
     — for `event EventHandler<TEventArgs>` members (covers most puppeteer-sharp events, e.g. `IPage.Console`).
@@ -84,35 +84,35 @@ Puppeteer's own code — none of them do anything with `pipe()` that chaining ca
     `EventHandler` members (e.g. `IPage.Load`), where `conversion` adapts the delegate shape.
   Both are already proven against real puppeteer-sharp events — see the code below.
 - **`Zip`/`ForkJoin`/`CombineLatest` are same-type-array-only.** RxJS's versions accept heterogeneously-typed
-  tuples (`zip(a$: Observable<string>, b$: Observable<number>)`). RxSharp's take `params Observable<T>[]` — every
+  tuples (`zip(a$: Observable<string>, b$: Observable<number>)`). ReactiveExtensionsSharp's take `params Observable<T>[]` — every
   source must share one element type. Check whether Puppeteer's actual `combineLatest`/`zip`/`forkJoin` call
   sites need heterogeneous types before assuming this is a drop-in replacement for those specific calls; if they
   do, project each source to a common shape first (a small wrapper record/tuple) before combining, then `.Map()`
   the result apart afterward.
 - **No config-object overloads.** Where RxJS takes a single options object (e.g. `retry({count, delay,
-  resetOnSuccess})`), RxSharp exposes the same options as separate, named overloads instead (e.g.
+  resetOnSuccess})`), ReactiveExtensionsSharp exposes the same options as separate, named overloads instead (e.g.
   `Retry(count, delay, scheduler, resetOnSuccess)` and a second `Retry(delaySelector, count, resetOnSuccess)`
   overload for the notifier-based delay form). Same coverage, just no anonymous-object-literal ergonomics — not
   a gap, just a different (and, for a statically-typed language, more idiomatic) shape.
 - **`Unit`, not `never`.** Where RxJS types a stream as `Observable<never>` (cancellation/timeout signals that
-  only ever error, never emit), RxSharp uses `Observable<Unit>` (`RxSharp.Unit`, a real struct — C# has no bottom
-  type). `Observable.FromCancellationToken` and `RxSharp.Extras.Timeout` both return `Observable<Unit>`.
+  only ever error, never emit), ReactiveExtensionsSharp uses `Observable<Unit>` (`ReactiveExtensionsSharp.Unit`, a real struct — C# has no bottom
+  type). `Observable.FromCancellationToken` and `ReactiveExtensionsSharp.Extras.Timeout` both return `Observable<Unit>`.
 
-## `RxSharp.Extras` — the hand-built combinators that don't exist in rxjs itself
+## `ReactiveExtensionsSharp.Extras` — the hand-built combinators that don't exist in rxjs itself
 
 Puppeteer's own rxjs usage isn't just the 40 wrapped symbols — it also builds a few combinators on top, inline,
-at each call site. RxSharp extracted the common ones into `RxSharp.Extras` so they're reusable instead of
+at each call site. ReactiveExtensionsSharp extracted the common ones into `ReactiveExtensionsSharp.Extras` so they're reusable instead of
 re-derived per call site:
 
 - **`Observable.FromCancellationToken(CancellationToken)`** — the `fromAbortSignal` analogue. Returns
   `Observable<Unit>` that errors with `OperationCanceledException` when the token is cancelled, never emits
   otherwise.
-- **`RxSharp.Extras.Timeout`** (`source.Timeout(TimeSpan, Func<Exception>? causeFactory = null)`) — errors if
+- **`ReactiveExtensionsSharp.Extras.Timeout`** (`source.Timeout(TimeSpan, Func<Exception>? causeFactory = null)`) — errors if
   `source` doesn't emit within the given span.
-- **`RxSharp.Extras.RetryAndRaceWithSignalAndTimer`** — the actual combinator behind `Locator` actions:
+- **`ReactiveExtensionsSharp.Extras.RetryAndRaceWithSignalAndTimer`** — the actual combinator behind `Locator` actions:
   `pipe(retry({delay}), raceWith(fromAbortSignal(...), timeout(...)))` in one call. This is the single most
   important piece for the `Locator` integration — see below.
-- **`RxSharp.Extras.FilterAsync`** — an async-predicate `Filter`, for cases where the filter condition itself
+- **`ReactiveExtensionsSharp.Extras.FilterAsync`** — an async-predicate `Filter`, for cases where the filter condition itself
   needs an `await` (e.g. checking element visibility via a JS evaluation).
 
 ## Proof this actually works: the M3 playground
@@ -126,11 +126,11 @@ in case that worktree isn't available wherever this integration actually happens
 All four tests below pass, end to end, launching a real browser via puppeteer-sharp's own `BrowserFetcher`:
 
 ```csharp
-using RxSharp;
-using RxSharp.Extras;
+using ReactiveExtensionsSharp;
+using ReactiveExtensionsSharp.Extras;
 
 // Mirrors Puppeteer's own Locator.click(): retry a click, racing against a timeout, built entirely
-// from RxSharp primitives (Defer + RetryAndRaceWithSignalAndTimer) - no puppeteer-sharp Locator API
+// from ReactiveExtensionsSharp primitives (Defer + RetryAndRaceWithSignalAndTimer) - no puppeteer-sharp Locator API
 // involved. The button is added to the page after a short delay, so the first few clicks fail with
 // "no node found" and only succeed once retry catches up.
 [Test]
@@ -227,7 +227,7 @@ public async Task FromEventShouldWrapARealPlainEventHandlerPuppeteerSharpEvent()
 ## What this actually replaces — `Locator`'s current implementation
 
 Puppeteer-sharp's real `Locator` class (`lib/PuppeteerSharp/Locators/Locator.cs`, as of the version checked
-while writing this doc) does **not** use RxSharp yet — it has its own hand-rolled retry loop,
+while writing this doc) does **not** use ReactiveExtensionsSharp yet — it has its own hand-rolled retry loop,
 `RunWithRetryAsync`:
 
 ```csharp
@@ -263,7 +263,7 @@ private async Task<IJSHandle> RunWithRetryAsync(
 
 This is **exactly** the shape `RetryAndRaceWithSignalAndTimer` exists to replace — a manual retry loop with a
 linked timeout/cancellation `CancellationTokenSource`, several catch clauses to disambiguate timeout vs.
-cancellation vs. "just retry," and a delay between attempts. The M3 playground test above proves the RxSharp
+cancellation vs. "just retry," and a delay between attempts. The M3 playground test above proves the ReactiveExtensionsSharp
 replacement handles the same two cases (retry-until-success, retry-until-real-timeout) correctly against a real
 page. The integration here is mechanical: wrap `operation` in `Observable.Defer(() => Observable.From(...))`,
 call `.RetryAndRaceWithSignalAndTimer(timeout, causeFactory, retryDelay, cancellationToken)`, and
@@ -282,13 +282,13 @@ that's a product decision, not something this doc can settle.
    end-to-end above, and touches the least surrounding code.
 3. Port test-first, same discipline this whole port was built with: find `Locator`'s existing xunit/nunit tests
    (whichever framework puppeteer-sharp uses — check the test project), make sure they still pass against the
-   RxSharp-based implementation before considering it done. Don't just eyeball it.
+   ReactiveExtensionsSharp-based implementation before considering it done. Don't just eyeball it.
 4. Once `Locator` is solid, look at `waitForNetworkIdle` (the `mergeScan`+`distinctUntilChanged` in-flight-request
    tracker) and `ScreenRecorder` (the `bufferCount`+`concatMap` frame-throttling) — both operators already exist
-   in RxSharp and are already tested, so this is the same "swap the hand-rolled version for the RxSharp one, keep
+   in ReactiveExtensionsSharp and are already tested, so this is the same "swap the hand-rolled version for the ReactiveExtensionsSharp one, keep
    the tests green" motion, not new operator-porting work.
 5. For anything not covered above: check the exact RxJS symbol against `CLAUDE.md`'s "Puppeteer-essential
    surface" section first — if it's already ported, use it directly; if it's one of the deliberate gaps (`pipe`,
    heterogeneous `zip`/`combineLatest`/`forkJoin`), see the sections above for the workaround; if it's something
-   genuinely missing, that's a real gap worth filing against the RxSharp repo rather than working around
+   genuinely missing, that's a real gap worth filing against the ReactiveExtensionsSharp repo rather than working around
    silently, since the port's whole premise is broad, faithful RxJS parity.

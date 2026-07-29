@@ -1,4 +1,4 @@
-# RxSharp
+# ReactiveExtensionsSharp
 
 [![build](https://github.com/hardkoded/ReactiveExtensions-Sharp/actions/workflows/build.yml/badge.svg)](https://github.com/hardkoded/ReactiveExtensions-Sharp/actions/workflows/build.yml)
 [![NuGet](https://img.shields.io/nuget/v/ReactiveExtensionsSharp.svg)](https://www.nuget.org/packages/ReactiveExtensionsSharp/)
@@ -7,7 +7,7 @@
 
 A .NET port of [RxJS](https://rxjs.dev/) — same operators, same semantics, same names you already know, in idiomatic C#.
 
-Why a new Rx library when [Rx.NET](https://github.com/dotnet/reactive) exists? RxSharp isn't trying to replace it — it's a deliberately faithful port of *RxJS specifically*, built to make it painless to bring JS reactive code (and the libraries built on it, like [Puppeteer](https://pptr.dev/)) over to .NET without re-learning a different Rx dialect. If you know `pipe(map(...), filter(...), takeUntil(...))`, you already know RxSharp.
+Why a new Rx library when [Rx.NET](https://github.com/dotnet/reactive) exists? ReactiveExtensionsSharp isn't trying to replace it — it's a deliberately faithful port of *RxJS specifically*, built to make it painless to bring JS reactive code (and the libraries built on it, like [Puppeteer](https://pptr.dev/)) over to .NET without re-learning a different Rx dialect. If you know `pipe(map(...), filter(...), takeUntil(...))`, you already know ReactiveExtensionsSharp.
 
 ## Quick taste
 
@@ -26,7 +26,7 @@ interval(1000)
   .subscribe(x => console.log(x));
 ```
 
-Same pipeline in RxSharp — real, compiling code:
+Same pipeline in ReactiveExtensionsSharp — real, compiling code:
 
 <!-- snippet: quick-taste-csharp -->
 <a id='snippet-quick-taste-csharp'></a>
@@ -39,7 +39,7 @@ Observable.Interval(TimeSpan.FromSeconds(1))
     .TakeUntil(clicks)
     .Subscribe(x => Console.WriteLine(x));
 ```
-<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
+<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/ReactiveExtensionsSharp.Tests/Samples/QuickTasteSample.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-quick-taste-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## What about `pipe`?
@@ -47,7 +47,7 @@ Observable.Interval(TimeSpan.FromSeconds(1))
 RxJS's `pipe(op1, op2, op3)` is mostly just method chaining wearing a different hat — `source.Map(...).Filter(...)`
 above *is* the translation. But RxJS's `pipe()` has a second job: called on its own (not as an `Observable`
 method), it builds a **reusable** transformation out of several operators, so you can define it once and apply
-it to multiple streams. RxSharp covers that with `OperatorFunction<TSource, TResult>` + `Pipe`:
+it to multiple streams. ReactiveExtensionsSharp covers that with `OperatorFunction<TSource, TResult>` + `Pipe`:
 
 <!-- snippet: pipe-csharp -->
 <a id='snippet-pipe-csharp'></a>
@@ -62,7 +62,7 @@ public static void Run(Observable<int> numbersA, Observable<int> numbersB)
     numbersB.Pipe(squareAndFilterEven).Subscribe(x => Console.WriteLine(x));
 }
 ```
-<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/PipeSample.cs#L11-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-pipe-csharp' title='Start of snippet'>anchor</a></sup>
+<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/ReactiveExtensionsSharp.Tests/Samples/PipeSample.cs#L11-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-pipe-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There's no hand-written 9-arity `pipe(op1, op2, ..., op9)` overload set, deliberately — it exists in RxJS mainly
@@ -79,7 +79,7 @@ don't wait forever." Puppeteer's own .NET port, `puppeteer-sharp`, doesn't have 
 the equivalent logic there is a hand-rolled `while(true)` loop with a linked `CancellationTokenSource` and five
 `catch` clauses to tell "timed out" apart from "cancelled" apart from "just retry."
 
-RxSharp ports that exact combinator as `RetryAndRaceWithSignalAndTimer`, proven against a real launched Chrome:
+ReactiveExtensionsSharp ports that exact combinator as `RetryAndRaceWithSignalAndTimer`, proven against a real launched Chrome:
 
 <!-- snippet: retry-until-timeout-csharp -->
 <a id='snippet-retry-until-timeout-csharp'></a>
@@ -92,7 +92,7 @@ public static async Task<string> FindElementOnceItRendersAsync(Func<Task<string>
         .RetryAndRaceWithSignalAndTimer(TimeSpan.FromSeconds(5), cancellationToken)
         .FirstValueFrom().ConfigureAwait(false);
 ```
-<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/RxSharp.Tests/Samples/RetryUntilTimeoutSample.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-retry-until-timeout-csharp' title='Start of snippet'>anchor</a></sup>
+<sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/ReactiveExtensionsSharp.Tests/Samples/RetryUntilTimeoutSample.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-retry-until-timeout-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Install
