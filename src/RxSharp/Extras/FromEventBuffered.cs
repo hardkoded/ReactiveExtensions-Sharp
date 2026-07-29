@@ -69,21 +69,24 @@ public static partial class RxExtensions
     /// <param name="removeHandler">Called on <see cref="BufferedEventSource{TEventArgs}.Dispose"/>, with the same handler, to remove it from the event.</param>
     /// <param name="conversion">Converts an <see cref="Action{TEventArgs}"/> callback into the event's actual delegate shape.</param>
     /// <param name="bufferSize">
-    /// The maximum number of most-recent payloads kept for replay. Defaults to 1 - fine if the caller only
-    /// cares about the single most recent payload, but a real risk if the caller filters for a specific match
-    /// among possibly-several payloads that could arrive in the pre-subscribe gap this method exists to cover:
-    /// with the default of 1, a matching payload can be silently evicted from the buffer by a later
-    /// non-matching one before anyone subscribes to see it. Pass a larger value whenever more than one payload
-    /// could plausibly arrive before subscription and only some of them are what the caller is looking for.
+    /// The maximum number of most-recent payloads kept for replay. Defaults to <see langword="null"/>, which
+    /// defers entirely to <see cref="ReplaySubject{T}"/>'s own default (unbounded) - this wrapper has no
+    /// buffering opinion of its own beyond what the primitive it's built on already does. A caller filtering
+    /// for a specific match among payloads that could arrive in the pre-subscribe gap this method exists to
+    /// cover needs more than 1: with too small a buffer, a matching payload can be silently evicted by a later
+    /// non-matching one before anyone subscribes to see it. Pass an explicit bound only if this source stays
+    /// attached for a long time without being subscribed to and unbounded growth is a real concern for that
+    /// specific usage - the gap this method targets is normally microseconds, not something an unbounded
+    /// buffer meaningfully grows during.
     /// </param>
     /// <returns>A handle exposing the buffered payloads as an observable, and detaching the handler on disposal.</returns>
     public static BufferedEventSource<TEventArgs> FromEventBuffered<TDelegate, TEventArgs>(
         Action<TDelegate> addHandler,
         Action<TDelegate> removeHandler,
         Func<Action<TEventArgs>, TDelegate> conversion,
-        int bufferSize = 1)
+        int? bufferSize = null)
     {
-        var subject = new ReplaySubject<TEventArgs>(bufferSize);
+        var subject = bufferSize is { } size ? new ReplaySubject<TEventArgs>(size) : new ReplaySubject<TEventArgs>();
         var handler = conversion(subject.OnNext);
         addHandler(handler);
         return new BufferedEventSource<TEventArgs>(subject, () => removeHandler(handler));
@@ -93,18 +96,11 @@ public static partial class RxExtensions
     /// <typeparam name="TEventArgs">The type of the event's payload.</typeparam>
     /// <param name="addHandler">Called immediately, with the handler to add to the event.</param>
     /// <param name="removeHandler">Called on <see cref="BufferedEventSource{TEventArgs}.Dispose"/>, with the same handler, to remove it from the event.</param>
-    /// <param name="bufferSize">
-    /// The maximum number of most-recent payloads kept for replay. Defaults to 1 - fine if the caller only
-    /// cares about the single most recent payload, but a real risk if the caller filters for a specific match
-    /// among possibly-several payloads that could arrive in the pre-subscribe gap this method exists to cover:
-    /// with the default of 1, a matching payload can be silently evicted from the buffer by a later
-    /// non-matching one before anyone subscribes to see it. Pass a larger value whenever more than one payload
-    /// could plausibly arrive before subscription and only some of them are what the caller is looking for.
-    /// </param>
+    /// <param name="bufferSize">See <see cref="FromEventBuffered{TDelegate, TEventArgs}"/>'s parameter of the same name.</param>
     /// <returns>A handle exposing the buffered payloads as an observable, and detaching the handler on disposal.</returns>
     public static BufferedEventSource<TEventArgs> FromEventBuffered<TEventArgs>(
         Action<EventHandler<TEventArgs>> addHandler,
         Action<EventHandler<TEventArgs>> removeHandler,
-        int bufferSize = 1)
+        int? bufferSize = null)
         => FromEventBuffered<EventHandler<TEventArgs>, TEventArgs>(addHandler, removeHandler, onNext => (_, args) => onNext(args), bufferSize);
 }
