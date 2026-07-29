@@ -1,4 +1,4 @@
-# Blog post material: RxSharp
+# Blog post material: ReactiveExtensionsSharp
 
 Raw facts and content for a blog post about this project. No voice/tone direction here on purpose — just what
 was built, why, and what's technically interesting about it. The writer should shape this into whatever the
@@ -6,7 +6,7 @@ actual post needs.
 
 ## The one-sentence pitch
 
-RxSharp is a .NET port of RxJS — not "another Rx library," a *faithful port of RxJS specifically*: same operator
+ReactiveExtensionsSharp is a .NET port of RxJS — not "another Rx library," a *faithful port of RxJS specifically*: same operator
 names, same semantics, same edge-case behavior, verified test-for-test against RxJS's own upstream spec suite
 (tag `7.8.2`). If you know `source$.pipe(map(x => x * 2), filter(x => x > 0))`, you already know how to use it.
 
@@ -33,7 +33,7 @@ Rx.NET for any of this — it hand-rolls the equivalent logic with `Cancellation
 loops, and manual `catch` clauses to disambiguate "timed out" from "cancelled" from "just retry this attempt."
 That code works, but it's bespoke, and every time upstream Puppeteer's JS reactive pipeline changes, someone has
 to re-derive the C# equivalent from scratch by reading rxjs semantics and re-implementing them imperatively.
-RxSharp exists so that translation becomes mechanical: the same rxjs operator, same name, same behavior, already
+ReactiveExtensionsSharp exists so that translation becomes mechanical: the same rxjs operator, same name, same behavior, already
 sitting there in C#.
 
 ### Concrete before/after: what this replaces
@@ -88,7 +88,7 @@ private async Task<IJSHandle> RunWithRetryAsync(
 }
 ```
 
-The RxSharp equivalent, proven against a real launched Chrome:
+The ReactiveExtensionsSharp equivalent, proven against a real launched Chrome:
 
 ```csharp
 await Observable.Defer(() => Observable.From(ClickOnceAsync()))

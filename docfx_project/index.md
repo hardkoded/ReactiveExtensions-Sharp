@@ -1,4 +1,4 @@
-# RxSharp
+# ReactiveExtensionsSharp
 
 A .NET port of [RxJS](https://rxjs.dev/) — same operators, same semantics, same names you already know, in idiomatic C#.
 

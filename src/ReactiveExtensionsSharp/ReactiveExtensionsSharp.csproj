@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>ReactiveExtensionsSharp</PackageId>
+    <Title>ReactiveExtensionsSharp</Title>
+    <Authors>Darío Kondratiuk</Authors>
+    <Description>A .NET port of RxJS (Reactive Extensions for JavaScript).</Description>
+    <PackageTags>rxjs;reactive;observable;rx;async</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/hardkoded/ReactiveExtensions-Sharp</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageVersion>0.2.0</PackageVersion>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>../../keys/rxsharp.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <DebugType>embedded</DebugType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!--
+      XML-doc completeness (CS1591, SA160x/SA161x) was suppressed here until the M4 docs pass landed real
+      <summary>/<param>/<returns>/<typeparam> comments across the public surface — see CLAUDE.md. Now enforced.
+
+      Still deliberately suppressed (unrelated to docs, re-litigate as its own decision if ever revisited):
+        - CA1032, CA1063/CA1816: full "standard exception constructors" / IDisposable(bool)+finalizer ceremony
+        - CA1062: defensive null-checks on every public parameter
+        - CA1716: parameter names that happen to collide with keywords in other CLI languages (e.g. `error`)
+        - CA2000: flags intentional-ownership-transfer disposable patterns as leaks
+        - CA1720: flags the `Single` operator's own name for containing a BCL type name (`System.Single`);
+          it is a literal, deliberate port of rxjs's `single()`, so the name is not up for renaming
+    -->
+    <NoWarn>$(NoWarn);CA1032;CA1063;CA1816;CA1062;CA1716;CA2000;CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeStyle" Version="4.11.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+    <AdditionalFiles Include="stylecop.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

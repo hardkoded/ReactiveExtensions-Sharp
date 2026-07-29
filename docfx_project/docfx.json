@@ -4,9 +4,9 @@
       "src": [
         {
           "files": [
-            "RxSharp.csproj"
+            "ReactiveExtensionsSharp.csproj"
           ],
-          "src": "../src/RxSharp"
+          "src": "../src/ReactiveExtensionsSharp"
         }
       ],
       "dest": "api",
@@ -43,7 +43,7 @@
     ],
     "postProcessors": [],
     "globalMetadata": {
-      "_appTitle": "RxSharp",
+      "_appTitle": "ReactiveExtensionsSharp",
       "_appFooter": "<span>Made with love by <a href=\"https://www.hardkoded.com\" rel=\"noreferrer\">Dario Kondratiuk</a></span>"
     },
     "markdownEngineName": "markdig",
