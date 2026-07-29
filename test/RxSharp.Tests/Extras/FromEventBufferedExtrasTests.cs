@@ -68,6 +68,26 @@ public class FromEventBufferedExtrasTests
     }
 
     [Test]
+    public void ShouldBufferEveryPreSubscribeValueByDefault()
+    {
+        // Locks in the default: null defers to ReplaySubject's own default (unbounded), not a small opinionated
+        // number - a matching payload must never be evicted by a later non-matching one before subscription.
+        var manager = new FakeTargetManager();
+        using var source = RxExtensions.FromEventBuffered<string>(
+            h => manager.TargetCreated += h,
+            h => manager.TargetCreated -= h);
+
+        manager.RaiseTargetCreated("one");
+        manager.RaiseTargetCreated("two");
+        manager.RaiseTargetCreated("three");
+
+        var received = new List<string>();
+        source.AsObservable().Subscribe(received.Add);
+
+        Assert.That(received, Is.EqualTo(new[] { "one", "two", "three" }));
+    }
+
+    [Test]
     public void ShouldOnlyReplayUpToTheRequestedBufferSize()
     {
         var manager = new FakeTargetManager();
