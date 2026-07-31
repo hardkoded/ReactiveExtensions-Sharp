@@ -90,7 +90,7 @@ ReactiveExtensionsSharp ports that exact combinator as `RetryAndRaceWithSignalAn
 public static async Task<string> FindElementOnceItRendersAsync(Func<Task<string>> tryFindElement, CancellationToken cancellationToken)
     => await Observable.Defer(() => Observable.From(tryFindElement()))
         .RetryAndRaceWithSignalAndTimer(TimeSpan.FromSeconds(5), cancellationToken)
-        .FirstValueFrom().ConfigureAwait(false);
+        .ConfigureAwait(false);
 ```
 <sup><a href='https://github.com/hardkoded/ReactiveExtensions-Sharp/blob/main/test/ReactiveExtensionsSharp.Tests/Samples/RetryUntilTimeoutSample.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-retry-until-timeout-csharp' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
