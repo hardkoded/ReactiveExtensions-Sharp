@@ -17,6 +17,6 @@ public static class RetryUntilTimeoutSample
     public static async Task<string> FindElementOnceItRendersAsync(Func<Task<string>> tryFindElement, CancellationToken cancellationToken)
         => await Observable.Defer(() => Observable.From(tryFindElement()))
             .RetryAndRaceWithSignalAndTimer(TimeSpan.FromSeconds(5), cancellationToken)
-            .FirstValueFrom().ConfigureAwait(false);
+            .ConfigureAwait(false);
     // end-snippet
 }

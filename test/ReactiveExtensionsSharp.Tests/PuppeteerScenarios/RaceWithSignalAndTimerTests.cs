@@ -12,100 +12,77 @@ namespace ReactiveExtensionsSharp.Tests.PuppeteerScenarios;
 public class RaceWithSignalAndTimerTests
 {
     [Test]
-    public void ShouldEmitTheSourceValueIfItArrivesBeforeTimeoutOrCancellation()
+    public async Task ShouldResolveWithTheSourceValueIfItArrivesBeforeTimeoutOrCancellation()
     {
-        using var signal = new ManualResetEventSlim();
-        var results = new List<string>();
-        var completed = false;
-
-        Observable.Of("target-created")
+        var result = await Observable.Of("target-created")
             .RaceWithSignalAndTimer(TimeSpan.FromSeconds(5), CancellationToken.None)
-            .Subscribe(results.Add, onComplete: () =>
-            {
-                completed = true;
-                signal.Set();
-            });
+            .ConfigureAwait(false);
 
-        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(results, Is.EqualTo(new[] { "target-created" }));
-        Assert.That(completed, Is.True);
+        Assert.That(result, Is.EqualTo("target-created"));
     }
 
     [Test]
     public void ShouldFailWithATimeoutErrorIfTheSourceNeverEmits()
     {
-        using var signal = new ManualResetEventSlim();
-        Exception? received = null;
-
-        Observable.Never<string>()
-            .RaceWithSignalAndTimer(TimeSpan.FromMilliseconds(30), CancellationToken.None)
-            .Subscribe(onError: err =>
-            {
-                received = err;
-                signal.Set();
-            });
-
-        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(received, Is.InstanceOf<TimeoutException>());
+        Assert.ThrowsAsync<TimeoutException>(() =>
+            Observable.Never<string>().RaceWithSignalAndTimer(TimeSpan.FromMilliseconds(30), CancellationToken.None));
     }
 
     [Test]
     public void ShouldFailWithCancellationIfTheCallerAborts()
     {
         using var cts = new CancellationTokenSource();
-        using var signal = new ManualResetEventSlim();
-        Exception? received = null;
-
-        Observable.Never<string>()
-            .RaceWithSignalAndTimer(TimeSpan.FromSeconds(5), cts.Token)
-            .Subscribe(onError: err =>
-            {
-                received = err;
-                signal.Set();
-            });
+        var task = Observable.Never<string>().RaceWithSignalAndTimer(TimeSpan.FromSeconds(5), cts.Token);
 
         cts.Cancel();
 
-        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(received, Is.InstanceOf<OperationCanceledException>());
+        Assert.ThrowsAsync<OperationCanceledException>(() => task);
     }
 
     [Test]
     public void ShouldUseASharedCauseForBothCancellationAndTimeout()
     {
-        using var signal = new ManualResetEventSlim();
-        Exception? received = null;
         var cause = new TimeoutException("waiting for target timed out");
 
-        Observable.Never<string>()
-            .RaceWithSignalAndTimer(TimeSpan.FromMilliseconds(30), () => cause, CancellationToken.None)
-            .Subscribe(onError: err =>
-            {
-                received = err;
-                signal.Set();
-            });
+        var ex = Assert.ThrowsAsync<TimeoutException>(() =>
+            Observable.Never<string>().RaceWithSignalAndTimer(TimeSpan.FromMilliseconds(30), () => cause, CancellationToken.None));
 
-        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(received, Is.SameAs(cause));
+        Assert.That(ex, Is.SameAs(cause));
     }
 
     [Test]
-    public void ShouldDisableTheTimeoutForAZeroOrNegativeValue()
+    public async Task ShouldDisableTheTimeoutForAZeroOrNegativeValue()
     {
-        using var signal = new ManualResetEventSlim();
-        var results = new List<string>();
-
         var subject = new ReactiveExtensionsSharp.Subjects.Subject<string>();
-        subject.AsObservable()
-            .RaceWithSignalAndTimer(TimeSpan.Zero, CancellationToken.None)
-            .Subscribe(results.Add, onComplete: signal.Set);
+        var task = subject.AsObservable().RaceWithSignalAndTimer(TimeSpan.Zero, CancellationToken.None);
 
         // Prove the timeout branch is truly disabled, not just long, by outliving what would otherwise fire.
-        Thread.Sleep(50);
+        await Task.Delay(50).ConfigureAwait(false);
         subject.OnNext("late-target");
-        subject.OnCompleted();
 
-        Assert.That(signal.Wait(TimeSpan.FromSeconds(2)), Is.True);
-        Assert.That(results, Is.EqualTo(new[] { "late-target" }));
+        var result = await task.ConfigureAwait(false);
+        Assert.That(result, Is.EqualTo("late-target"));
+    }
+
+    [Test]
+    public void ShouldFailWithASignalTasksExceptionIfItFiresBeforeTimeout()
+    {
+        var signalTcs = new TaskCompletionSource<bool>();
+        var cause = new InvalidOperationException("session closed");
+        signalTcs.SetException(cause);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Observable.Never<string>().RaceWithSignalAndTimer(TimeSpan.FromSeconds(5), causeFactory: null, signalTcs.Task));
+
+        Assert.That(ex, Is.SameAs(cause));
+    }
+
+    [Test]
+    public void ShouldFailWithATimeoutErrorIfItFiresBeforeAPendingSignalTask()
+    {
+        var signalTcs = new TaskCompletionSource<bool>();
+
+        Assert.ThrowsAsync<TimeoutException>(() =>
+            Observable.Never<string>().RaceWithSignalAndTimer(TimeSpan.FromMilliseconds(30), causeFactory: null, signalTcs.Task));
     }
 }
